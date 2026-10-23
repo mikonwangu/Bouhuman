@@ -11,7 +11,7 @@ var _base_scale := 1.0
 
 
 func _process(delta: float) -> void:
-	pose_phase += delta * (8.0 if attacking else 4.0)
+	pose_phase += delta * (12.0 if attacking else 6.0)
 	queue_redraw()
 
 

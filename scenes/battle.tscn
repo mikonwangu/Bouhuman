@@ -99,7 +99,13 @@ custom_minimum_size = Vector2(120, 40)
 layout_mode = 2
 text = "必殺 (V)"
 
+[node name="JumpButton" type="Button" parent="UI/Root/Buttons"]
+custom_minimum_size = Vector2(120, 40)
+layout_mode = 2
+text = "ジャンプ (Space)"
+
 [connection signal="pressed" from="UI/Root/Buttons/WeakButton" to="." method="_on_weak_pressed"]
 [connection signal="pressed" from="UI/Root/Buttons/MidButton" to="." method="_on_mid_pressed"]
 [connection signal="pressed" from="UI/Root/Buttons/StrongButton" to="." method="_on_strong_pressed"]
 [connection signal="pressed" from="UI/Root/Buttons/SpecialButton" to="." method="_on_special_pressed"]
+[connection signal="pressed" from="UI/Root/Buttons/JumpButton" to="." method="_on_jump_pressed"]
