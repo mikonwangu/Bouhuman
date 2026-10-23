@@ -1,0 +1,12 @@
+# Godot 4
+.godot/
+*.translation
+export.cfg
+builds/
+*.mono
+.import/
+
+# OS / editor
+.DS_Store
+*.swp
+*~

@@ -1,0 +1,96 @@
+[gd_scene load_steps=2 format=3 uid="uid://bqreward001"]
+
+[ext_resource type="Script" path="res://scripts/reward.gd" id="1_reward"]
+
+[node name="Reward" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_reward")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.12, 0.14, 0.18, 1)
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/margin_left = 36
+theme_override_constants/margin_top = 28
+theme_override_constants/margin_right = 36
+theme_override_constants/margin_bottom = 28
+
+[node name="VBox" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TitleLabel" type="Label" parent="Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 26
+text = "報酬を選んでください"
+
+[node name="Choices" type="VBoxContainer" parent="Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="EquipPanel" type="VBoxContainer" parent="Margin/VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="EquipTitle" type="Label" parent="Margin/VBox/EquipPanel"]
+layout_mode = 2
+text = "武器装備 / 必殺入れ替え"
+
+[node name="Lists" type="HBoxContainer" parent="Margin/VBox/EquipPanel"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="WeaponCol" type="VBoxContainer" parent="Margin/VBox/EquipPanel/Lists"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="WLabel" type="Label" parent="Margin/VBox/EquipPanel/Lists/WeaponCol"]
+layout_mode = 2
+text = "武器"
+
+[node name="WeaponList" type="ItemList" parent="Margin/VBox/EquipPanel/Lists/WeaponCol"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 120)
+layout_mode = 2
+
+[node name="SpecialCol" type="VBoxContainer" parent="Margin/VBox/EquipPanel/Lists"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="SLabel" type="Label" parent="Margin/VBox/EquipPanel/Lists/SpecialCol"]
+layout_mode = 2
+text = "必殺"
+
+[node name="SpecialList" type="ItemList" parent="Margin/VBox/EquipPanel/Lists/SpecialCol"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 120)
+layout_mode = 2
+
+[node name="ContinueButton" type="Button" parent="Margin/VBox"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(200, 44)
+layout_mode = 2
+size_flags_horizontal = 0
+text = "続行"
+
+[connection signal="item_selected" from="Margin/VBox/EquipPanel/Lists/WeaponCol/WeaponList" to="." method="_on_weapon_selected"]
+[connection signal="item_selected" from="Margin/VBox/EquipPanel/Lists/SpecialCol/SpecialList" to="." method="_on_special_selected"]
+[connection signal="pressed" from="Margin/VBox/ContinueButton" to="." method="_on_continue_pressed"]
