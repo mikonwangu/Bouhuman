@@ -23,17 +23,23 @@ var _attack_cd: float = 0.0
 var _finished: bool = false
 var _char_data: Dictionary = {}
 var _weapon: Dictionary = {}
-var _move_speed: float = 180.0
+var _move_speed: float = 280.0
+var _enemy_move_speed: float = 140.0
 var _vel_y: float = 0.0
 var _on_ground: bool = true
 
 const FLOOR_Y := 320.0
 const LEFT_BOUND := 80.0
 const RIGHT_BOUND := 880.0
-const GRAVITY := 1600.0
-const JUMP_SPEED := -520.0
+## キビキビ寄り: 重力↑ + 初速調整（滞空が短く着地が早い）
+const GRAVITY := 2800.0
+const JUMP_SPEED := -620.0
 ## これより高く浮いていると敵の近接を回避（スタブ用）
-const AIR_DODGE_HEIGHT := 48.0
+const AIR_DODGE_HEIGHT := 40.0
+const ATTACK_POSE_SEC := 0.12
+const SPECIAL_POSE_SEC := 0.20
+const END_DELAY_SEC := 0.35
+const BASE_MOVE_SPEED := 280.0
 
 
 func _ready() -> void:
@@ -45,7 +51,7 @@ func _ready() -> void:
 	_enemy_hp = _enemy_max_hp
 	_enemy_damage = int(enemy["damage"])
 	_enemy_interval = float(enemy["attack_interval"])
-	_move_speed = 180.0 * float(_char_data["speed_mul"])
+	_move_speed = BASE_MOVE_SPEED * float(_char_data["speed_mul"])
 
 	_player = StickFigureScript.new()
 	_player.figure_color = _char_data["color"]
@@ -154,7 +160,7 @@ func _do_weapon_attack(tier: String) -> void:
 	var reach: float = float(atk["reach"])
 	_attack_cd = float(atk["cooldown"]) / maxf(0.5, float(_char_data["speed_mul"]))
 	_player.attacking = true
-	get_tree().create_timer(0.2).timeout.connect(func(): _player.attacking = false)
+	get_tree().create_timer(ATTACK_POSE_SEC).timeout.connect(func(): _player.attacking = false)
 	# 空中でも横リーチで判定（スタブ）
 	var dist := absf(_enemy_pos.x - _player_pos.x)
 	var air_ok := absf(_player_pos.y - FLOOR_Y) < 90.0
@@ -174,9 +180,9 @@ func _do_special() -> void:
 	var sp: Dictionary = GameState.get_equipped_special()
 	var dmg := GameState.special_damage()
 	# スタブ: 必殺はリーチ長め・必中寄り（空中可）
-	_attack_cd = float(sp.get("cooldown", 0.8))
+	_attack_cd = float(sp.get("cooldown", 0.55))
 	_player.attacking = true
-	get_tree().create_timer(0.35).timeout.connect(func(): _player.attacking = false)
+	get_tree().create_timer(SPECIAL_POSE_SEC).timeout.connect(func(): _player.attacking = false)
 	_hurt_enemy(dmg)
 	_log("%s！ %d ダメージ（残 %d）" % [sp["name"], dmg, GameState.special_uses])
 	_refresh_status()
@@ -196,7 +202,7 @@ func _enemy_ai(delta: float) -> void:
 		return
 	# プレイヤーへ接近して攻撃（地上のみ・ジャンプしない）
 	var dir := signf(_player_pos.x - _enemy_pos.x)
-	_enemy_pos.x = clampf(_enemy_pos.x + dir * 90.0 * delta, LEFT_BOUND + 120.0, RIGHT_BOUND)
+	_enemy_pos.x = clampf(_enemy_pos.x + dir * _enemy_move_speed * delta, LEFT_BOUND + 120.0, RIGHT_BOUND)
 	_enemy_pos.y = FLOOR_Y
 	_enemy.facing = -1.0 if dir < 0 else 1.0
 	_enemy_timer -= delta
@@ -212,11 +218,11 @@ func _enemy_ai(delta: float) -> void:
 	var height := FLOOR_Y - _player_pos.y
 	if height >= AIR_DODGE_HEIGHT:
 		_enemy.attacking = true
-		get_tree().create_timer(0.2).timeout.connect(func(): _enemy.attacking = false)
+		get_tree().create_timer(ATTACK_POSE_SEC).timeout.connect(func(): _enemy.attacking = false)
 		_log("敵の攻撃をジャンプで回避！")
 		return
 	_enemy.attacking = true
-	get_tree().create_timer(0.2).timeout.connect(func(): _enemy.attacking = false)
+	get_tree().create_timer(ATTACK_POSE_SEC).timeout.connect(func(): _enemy.attacking = false)
 	var alive := GameState.apply_damage_to_player(_enemy_damage)
 	_log("敵の攻撃！ %d ダメージ" % _enemy_damage)
 	player_hp_bar.value = GameState.hp
@@ -229,7 +235,7 @@ func _finish_win() -> void:
 		return
 	_finished = true
 	_log("勝利！")
-	await get_tree().create_timer(0.6).timeout
+	await get_tree().create_timer(END_DELAY_SEC).timeout
 	GameState.on_battle_won()
 
 
@@ -238,7 +244,7 @@ func _finish_lose() -> void:
 		return
 	_finished = true
 	_log("敗北…")
-	await get_tree().create_timer(0.6).timeout
+	await get_tree().create_timer(END_DELAY_SEC).timeout
 	GameState.on_battle_lost()
 
 
