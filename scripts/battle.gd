@@ -1,5 +1,5 @@
 extends Node2D
-## リアルタイム戦闘スタブ: 弱/中/強/必殺 vs 単純敵
+## リアルタイム戦闘スタブ: 弱/中/強/必殺 + ジャンプ vs 単純敵
 
 const StickFigureScript = preload("res://scripts/stick_figure.gd")
 const WeaponCatalogScript = preload("res://data/weapon_catalog.gd")
@@ -24,9 +24,16 @@ var _finished: bool = false
 var _char_data: Dictionary = {}
 var _weapon: Dictionary = {}
 var _move_speed: float = 180.0
+var _vel_y: float = 0.0
+var _on_ground: bool = true
+
 const FLOOR_Y := 320.0
 const LEFT_BOUND := 80.0
 const RIGHT_BOUND := 880.0
+const GRAVITY := 1600.0
+const JUMP_SPEED := -520.0
+## これより高く浮いていると敵の近接を回避（スタブ用）
+const AIR_DODGE_HEIGHT := 48.0
 
 
 func _ready() -> void:
@@ -56,10 +63,14 @@ func _ready() -> void:
 	player_hp_bar.value = GameState.hp
 	enemy_hp_bar.max_value = _enemy_max_hp
 	enemy_hp_bar.value = _enemy_hp
-	status_label.text = "%s vs %s | 必殺残 %d | Z弱 X中 C強 V必殺 | A/D移動" % [
-		_char_data["name"], enemy["name"], GameState.special_uses
-	]
+	_refresh_status()
 	_log("戦闘開始！")
+
+
+func _refresh_status() -> void:
+	status_label.text = "%s vs 敵 | 必殺残 %d | Z弱 X中 C強 V必殺 | A/D移動 Spaceジャンプ" % [
+		_char_data["name"], GameState.special_uses
+	]
 
 
 func _process(delta: float) -> void:
@@ -67,6 +78,8 @@ func _process(delta: float) -> void:
 		return
 	_attack_cd = maxf(0.0, _attack_cd - delta)
 	_handle_move(delta)
+	_handle_jump_input()
+	_apply_gravity(delta)
 	_handle_attacks()
 	# 勝利確定と同フレームで敵攻撃が通らないよう、await 前の _finished を再確認
 	if _finished:
@@ -89,8 +102,35 @@ func _handle_move(delta: float) -> void:
 	if Input.is_action_pressed("move_right"):
 		dir += 1.0
 	_player_pos.x = clampf(_player_pos.x + dir * _move_speed * delta, LEFT_BOUND, RIGHT_BOUND - 120.0)
-	_player_pos.y = FLOOR_Y
 	_player.facing = 1.0 if _enemy_pos.x >= _player_pos.x else -1.0
+
+
+func _handle_jump_input() -> void:
+	if _finished:
+		return
+	if Input.is_action_just_pressed("jump"):
+		_try_jump()
+
+
+func _try_jump() -> void:
+	if _finished or not _on_ground:
+		return
+	_vel_y = JUMP_SPEED
+	_on_ground = false
+	_log("ジャンプ！")
+
+
+func _apply_gravity(delta: float) -> void:
+	if _on_ground and _vel_y >= 0.0:
+		_player_pos.y = FLOOR_Y
+		_vel_y = 0.0
+		return
+	_vel_y += GRAVITY * delta
+	_player_pos.y += _vel_y * delta
+	if _player_pos.y >= FLOOR_Y:
+		_player_pos.y = FLOOR_Y
+		_vel_y = 0.0
+		_on_ground = true
 
 
 func _handle_attacks() -> void:
@@ -115,8 +155,10 @@ func _do_weapon_attack(tier: String) -> void:
 	_attack_cd = float(atk["cooldown"]) / maxf(0.5, float(_char_data["speed_mul"]))
 	_player.attacking = true
 	get_tree().create_timer(0.2).timeout.connect(func(): _player.attacking = false)
+	# 空中でも横リーチで判定（スタブ）
 	var dist := absf(_enemy_pos.x - _player_pos.x)
-	if dist <= reach:
+	var air_ok := absf(_player_pos.y - FLOOR_Y) < 90.0
+	if dist <= reach and air_ok:
 		_hurt_enemy(dmg)
 		_log("%s ヒット！ %d ダメージ" % [atk["name"], dmg])
 	else:
@@ -131,13 +173,13 @@ func _do_special() -> void:
 		return
 	var sp: Dictionary = GameState.get_equipped_special()
 	var dmg := GameState.special_damage()
-	# スタブ: 必殺はリーチ長め・必中寄り
+	# スタブ: 必殺はリーチ長め・必中寄り（空中可）
 	_attack_cd = float(sp.get("cooldown", 0.8))
 	_player.attacking = true
 	get_tree().create_timer(0.35).timeout.connect(func(): _player.attacking = false)
 	_hurt_enemy(dmg)
 	_log("%s！ %d ダメージ（残 %d）" % [sp["name"], dmg, GameState.special_uses])
-	status_label.text = "%s | 必殺残 %d | Z弱 X中 C強 V必殺" % [_char_data["name"], GameState.special_uses]
+	_refresh_status()
 
 
 func _hurt_enemy(amount: int) -> void:
@@ -152,7 +194,7 @@ func _hurt_enemy(amount: int) -> void:
 func _enemy_ai(delta: float) -> void:
 	if _finished:
 		return
-	# プレイヤーへ接近して攻撃
+	# プレイヤーへ接近して攻撃（地上のみ・ジャンプしない）
 	var dir := signf(_player_pos.x - _enemy_pos.x)
 	_enemy_pos.x = clampf(_enemy_pos.x + dir * 90.0 * delta, LEFT_BOUND + 120.0, RIGHT_BOUND)
 	_enemy_pos.y = FLOOR_Y
@@ -165,6 +207,13 @@ func _enemy_ai(delta: float) -> void:
 		return
 	var dist := absf(_enemy_pos.x - _player_pos.x)
 	if dist > 70.0:
+		return
+	# プレイヤーが大きく浮いているときは近接を外す
+	var height := FLOOR_Y - _player_pos.y
+	if height >= AIR_DODGE_HEIGHT:
+		_enemy.attacking = true
+		get_tree().create_timer(0.2).timeout.connect(func(): _enemy.attacking = false)
+		_log("敵の攻撃をジャンプで回避！")
 		return
 	_enemy.attacking = true
 	get_tree().create_timer(0.2).timeout.connect(func(): _enemy.attacking = false)
@@ -219,3 +268,7 @@ func _on_special_pressed() -> void:
 	if _finished or _attack_cd > 0.0:
 		return
 	_do_special()
+
+
+func _on_jump_pressed() -> void:
+	_try_jump()
