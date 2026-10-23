@@ -12,6 +12,9 @@ const SpecialCatalogScript = preload("res://data/special_catalog.gd")
 func _ready() -> void:
 	GameState.phase = GameState.Phase.PRE_BATTLE
 	_refresh()
+	var fight := get_node_or_null("Margin/VBox/FightButton") as Button
+	if fight:
+		fight.grab_focus()
 
 
 func _refresh() -> void:

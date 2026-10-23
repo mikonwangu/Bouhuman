@@ -15,9 +15,9 @@ func _ready() -> void:
 	_refresh_volume_label()
 
 	size_option.clear()
-	size_option.add_item("小 (640×360)", 0)
-	size_option.add_item("中 (960×540)", 1)
-	size_option.add_item("大 (1280×720)", 2)
+	size_option.add_item("小 (640x360)", 0)
+	size_option.add_item("中 (960x540)", 1)
+	size_option.add_item("大 (1280x720)", 2)
 	size_option.add_item("フルスクリーン", 3)
 	var size_keys := ["small", "medium", "large", "fullscreen"]
 	size_option.select(size_keys.find(SettingsManager.browser_size))

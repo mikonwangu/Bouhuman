@@ -3,6 +3,9 @@ extends Control
 
 func _ready() -> void:
 	GameState.phase = GameState.Phase.TITLE
+	var play := get_node_or_null("Center/VBox/PlayButton") as Button
+	if play:
+		play.grab_focus()
 
 
 func _on_play_pressed() -> void:
