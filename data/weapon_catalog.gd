@@ -129,25 +129,25 @@ static func rarity_label(rarity: int) -> String:
 			return "?"
 
 
+## 未所持が無い場合は空文字（呼び出し側で枠を出さない）
 static func pick_normal_drop(owned: Array) -> String:
 	var candidates: Array[String] = []
 	for wid in NORMAL_DROP_IDS:
 		if wid not in owned:
 			candidates.append(wid)
 	if candidates.is_empty():
-		return NORMAL_DROP_IDS[randi() % NORMAL_DROP_IDS.size()]
+		return ""
 	return candidates[randi() % candidates.size()]
 
 
+## 未所持が無い場合は空文字。SR 低確率 / それ以外 HR。
 static func pick_boss_drop(owned: Array) -> String:
 	var candidates: Array[String] = []
 	for wid in BOSS_DROP_IDS:
 		if wid not in owned:
 			candidates.append(wid)
 	if candidates.is_empty():
-		return BOSS_DROP_IDS[randi() % BOSS_DROP_IDS.size()]
-	# SR は低確率
-	var roll := randf()
+		return ""
 	var sr: Array[String] = []
 	var hr: Array[String] = []
 	for wid in candidates:
@@ -155,8 +155,23 @@ static func pick_boss_drop(owned: Array) -> String:
 			sr.append(wid)
 		else:
 			hr.append(wid)
+	var roll := randf()
 	if roll < 0.2 and not sr.is_empty():
 		return sr[randi() % sr.size()]
 	if not hr.is_empty():
 		return hr[randi() % hr.size()]
 	return candidates[randi() % candidates.size()]
+
+
+static func has_unowned_normal_drop(owned: Array) -> bool:
+	for wid in NORMAL_DROP_IDS:
+		if wid not in owned:
+			return true
+	return false
+
+
+static func has_unowned_boss_drop(owned: Array) -> bool:
+	for wid in BOSS_DROP_IDS:
+		if wid not in owned:
+			return true
+	return false

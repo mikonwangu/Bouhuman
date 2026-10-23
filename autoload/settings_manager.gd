@@ -73,6 +73,8 @@ func apply_audio() -> void:
 
 
 func apply_display() -> void:
+	if browser_size not in BROWSER_SIZES:
+		browser_size = "medium"
 	if browser_size == "fullscreen":
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 		return
@@ -112,9 +114,13 @@ func load_settings() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load(SAVE_PATH) != OK:
 		return
-	master_volume_step = int(cfg.get_value("audio", "master_volume_step", master_volume_step))
+	master_volume_step = clampi(int(cfg.get_value("audio", "master_volume_step", master_volume_step)), 0, 9)
 	browser_size = str(cfg.get_value("display", "browser_size", browser_size))
+	if browser_size not in BROWSER_SIZES:
+		browser_size = "medium"
 	quality = str(cfg.get_value("display", "quality", quality))
+	if quality not in ["low", "mid", "high"]:
+		quality = "mid"
 
 
 func quality_label_ja() -> String:

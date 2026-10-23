@@ -87,26 +87,50 @@ static func rarity_label(rarity: int) -> String:
 			return "?"
 
 
+## 未所持が無い場合は空文字。レア帯を先に決め、その帯の未所持から1つ。
+## 重み: SR 10% / HR 35% / R 30% / N 25%。空帯はフォールバック。
 static func pick_boss_special(owned: Array) -> String:
-	var candidates: Array[String] = []
+	var sr: Array[String] = []
+	var hr: Array[String] = []
+	var r: Array[String] = []
+	var n: Array[String] = []
+	for sid in BOSS_SPECIAL_IDS:
+		if sid in owned:
+			continue
+		var s: String = sid
+		if s.begins_with("S-SR"):
+			sr.append(s)
+		elif s.begins_with("S-HR"):
+			hr.append(s)
+		elif s.begins_with("S-R"):
+			r.append(s)
+		else:
+			n.append(s)
+	if sr.is_empty() and hr.is_empty() and r.is_empty() and n.is_empty():
+		return ""
+
+	var roll := randf()
+	var preferred: Array[String]
+	if roll < 0.10:
+		preferred = sr
+	elif roll < 0.45:
+		preferred = hr
+	elif roll < 0.75:
+		preferred = r
+	else:
+		preferred = n
+
+	if not preferred.is_empty():
+		return preferred[randi() % preferred.size()]
+	# 空帯フォールバック（SR→HR→R→N の順で最初の非空）
+	for bucket in [sr, hr, r, n]:
+		if not bucket.is_empty():
+			return bucket[randi() % bucket.size()]
+	return ""
+
+
+static func has_unowned_boss_special(owned: Array) -> bool:
 	for sid in BOSS_SPECIAL_IDS:
 		if sid not in owned:
-			candidates.append(sid)
-	if candidates.is_empty():
-		return BOSS_SPECIAL_IDS[randi() % BOSS_SPECIAL_IDS.size()]
-	var roll := randf()
-	var bucket: Array[String] = []
-	for sid in candidates:
-		var s: String = sid
-		if roll < 0.1 and s.begins_with("S-SR"):
-			bucket.append(s)
-		elif roll < 0.45 and (s.begins_with("S-HR") or s.begins_with("S-SR")):
-			bucket.append(s)
-		elif roll < 0.75 and (s.begins_with("S-R") or s.begins_with("S-HR") or s.begins_with("S-SR")):
-			bucket.append(s)
-		else:
-			bucket.append(s)
-	# レア度フィルタが空なら全体から
-	if bucket.is_empty():
-		bucket = candidates
-	return bucket[randi() % bucket.size()]
+			return true
+	return false

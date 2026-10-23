@@ -133,60 +133,61 @@ func _build_reward_choices() -> void:
 		pending_rewards.append(pool[i])
 
 
-func _normal_reward_pool() -> Array[Dictionary]:
-	var list: Array[Dictionary] = [
+func _stat_reward_options() -> Array[Dictionary]:
+	return [
 		{"id": "R1", "title": "最大HPアップ", "desc": "最大HP +%d" % MAX_HP_UP},
 		{"id": "R2", "title": "HP回復", "desc": "現在HP +%d（最大まで）" % HEAL_AMOUNT},
 		{"id": "R3", "title": "必殺回数＋1", "desc": "必殺の残り回数 +1"},
 		{"id": "R4", "title": "必殺威力アップ", "desc": "必殺ダメージ基準 +%d" % SPECIAL_POWER_UP},
 	]
+
+
+func _normal_reward_pool() -> Array[Dictionary]:
+	var list: Array[Dictionary] = _stat_reward_options()
 	var drop_id := WeaponCatalogScript.pick_normal_drop(owned_weapons)
-	var w: Dictionary = WeaponCatalogScript.get_weapon(drop_id)
-	list.append({
-		"id": "R5",
-		"title": "武器ドロップ",
-		"desc": "%s [%s] を入手" % [w["name"], WeaponCatalogScript.rarity_label(w["rarity"])],
-		"weapon_id": drop_id,
-	})
+	if drop_id != "":
+		var w: Dictionary = WeaponCatalogScript.get_weapon(drop_id)
+		list.append({
+			"id": "R5",
+			"title": "武器ドロップ",
+			"desc": "%s [%s] を入手" % [w["name"], WeaponCatalogScript.rarity_label(w["rarity"])],
+			"weapon_id": drop_id,
+		})
 	return list
 
 
 func _boss_reward_pool() -> Array[Dictionary]:
 	var list: Array[Dictionary] = []
 	var sid := SpecialCatalogScript.pick_boss_special(owned_specials)
-	var sp: Dictionary = SpecialCatalogScript.get_special(sid)
-	list.append({
-		"id": "B1",
-		"title": "必殺技の入手",
-		"desc": "%s [%s] を入手" % [sp["name"], SpecialCatalogScript.rarity_label(sp["rarity"])],
-		"special_id": sid,
-	})
+	if sid != "":
+		var sp: Dictionary = SpecialCatalogScript.get_special(sid)
+		list.append({
+			"id": "B1",
+			"title": "必殺技の入手",
+			"desc": "%s [%s] を入手" % [sp["name"], SpecialCatalogScript.rarity_label(sp["rarity"])],
+			"special_id": sid,
+		})
 	var wid := WeaponCatalogScript.pick_boss_drop(owned_weapons)
-	var w: Dictionary = WeaponCatalogScript.get_weapon(wid)
-	list.append({
-		"id": "B2",
-		"title": "上位武器の入手",
-		"desc": "%s [%s] を入手" % [w["name"], WeaponCatalogScript.rarity_label(w["rarity"])],
-		"weapon_id": wid,
-	})
+	if wid != "":
+		var w: Dictionary = WeaponCatalogScript.get_weapon(wid)
+		list.append({
+			"id": "B2",
+			"title": "上位武器の入手",
+			"desc": "%s [%s] を入手" % [w["name"], WeaponCatalogScript.rarity_label(w["rarity"])],
+			"weapon_id": wid,
+		})
 	if not has_death_avoid and not death_avoid_used:
 		list.append({
 			"id": "B3",
 			"title": "即死回避",
 			"desc": "致死ダメージを1回だけ回避（ラン中・通算1回）",
 		})
-	else:
-		# 即死回避済みなら通常枠を補充して3択を維持
-		list.append({
-			"id": "R1",
-			"title": "最大HPアップ",
-			"desc": "最大HP +%d" % MAX_HP_UP,
-		})
-		list.append({
-			"id": "R3",
-			"title": "必殺回数＋1",
-			"desc": "必殺の残り回数 +1",
-		})
+	# ドロップ枯渇・即死回避済みでも最大3択になるようステータス報酬で補充
+	if list.size() < 3:
+		for filler in _stat_reward_options():
+			if list.size() >= 3:
+				break
+			list.append(filler)
 	return list
 
 
@@ -194,8 +195,8 @@ func apply_reward(reward: Dictionary) -> void:
 	var rid: String = str(reward.get("id", ""))
 	match rid:
 		"R1":
+			# 要件: 最大HP +10 のみ（現在HPは変更しない）
 			max_hp += MAX_HP_UP
-			hp = mini(hp + MAX_HP_UP, max_hp)
 		"R2":
 			hp = mini(hp + HEAL_AMOUNT, max_hp)
 		"R3":

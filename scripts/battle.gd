@@ -68,7 +68,12 @@ func _process(delta: float) -> void:
 	_attack_cd = maxf(0.0, _attack_cd - delta)
 	_handle_move(delta)
 	_handle_attacks()
+	# 勝利確定と同フレームで敵攻撃が通らないよう、await 前の _finished を再確認
+	if _finished:
+		return
 	_enemy_ai(delta)
+	if _finished:
+		return
 	_player.position = _player_pos
 	_enemy.position = _enemy_pos
 	player_hp_bar.value = GameState.hp
@@ -76,6 +81,8 @@ func _process(delta: float) -> void:
 
 
 func _handle_move(delta: float) -> void:
+	if _finished:
+		return
 	var dir := 0.0
 	if Input.is_action_pressed("move_left"):
 		dir -= 1.0
@@ -87,7 +94,7 @@ func _handle_move(delta: float) -> void:
 
 
 func _handle_attacks() -> void:
-	if _attack_cd > 0.0:
+	if _finished or _attack_cd > 0.0:
 		return
 	if Input.is_action_just_pressed("attack_weak"):
 		_do_weapon_attack("weak")
@@ -100,6 +107,8 @@ func _handle_attacks() -> void:
 
 
 func _do_weapon_attack(tier: String) -> void:
+	if _finished:
+		return
 	var atk: Dictionary = _weapon[tier]
 	var dmg := int(round(float(atk["damage"]) * float(_char_data["attack_mul"])))
 	var reach: float = float(atk["reach"])
@@ -115,6 +124,8 @@ func _do_weapon_attack(tier: String) -> void:
 
 
 func _do_special() -> void:
+	if _finished:
+		return
 	if not GameState.try_consume_special():
 		_log("必殺の残り回数がない")
 		return
@@ -130,6 +141,8 @@ func _do_special() -> void:
 
 
 func _hurt_enemy(amount: int) -> void:
+	if _finished:
+		return
 	_enemy_hp = maxi(0, _enemy_hp - amount)
 	enemy_hp_bar.value = _enemy_hp
 	if _enemy_hp <= 0:
@@ -137,6 +150,8 @@ func _hurt_enemy(amount: int) -> void:
 
 
 func _enemy_ai(delta: float) -> void:
+	if _finished:
+		return
 	# プレイヤーへ接近して攻撃
 	var dir := signf(_player_pos.x - _enemy_pos.x)
 	_enemy_pos.x = clampf(_enemy_pos.x + dir * 90.0 * delta, LEFT_BOUND + 120.0, RIGHT_BOUND)
@@ -146,6 +161,8 @@ func _enemy_ai(delta: float) -> void:
 	if _enemy_timer > 0.0:
 		return
 	_enemy_timer = _enemy_interval
+	if _finished:
+		return
 	var dist := absf(_enemy_pos.x - _player_pos.x)
 	if dist > 70.0:
 		return
