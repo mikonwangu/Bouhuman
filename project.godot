@@ -13,6 +13,7 @@ config/icon="res://icon.svg"
 
 [autoload]
 
+FontBootstrap="*res://autoload/font_bootstrap.gd"
 SettingsManager="*res://autoload/settings_manager.gd"
 GameState="*res://autoload/game_state.gd"
 
@@ -23,6 +24,10 @@ window/size/viewport_height=540
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 window/handheld/orientation=0
+
+[gui]
+
+theme/custom="res://theme/game_theme.tres"
 
 [input]
 

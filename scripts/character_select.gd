@@ -16,13 +16,18 @@ func _ready() -> void:
 	_preview = StickFigureScript.new()
 	preview_host.add_child(_preview)
 	_select(CharacterTypesScript.Type.BALANCE)
+	# Web / 自動化向け: 開始ボタンにフォーカス（Enter で進行可能）
+	var confirm := get_node_or_null("Margin/VBox/Actions/ConfirmButton") as Button
+	if confirm:
+		confirm.grab_focus()
 
 
 func _select(t: int) -> void:
 	_selected = t
 	var data: Dictionary = CharacterTypesScript.get_type(t)
 	name_label.text = data["name"]
-	desc_label.text = "%s\n攻撃補正 ×%.2f / 速度補正 ×%.2f" % [
+	# ASCII "x" — Web 埋め込みフォントで乗算記号 × が欠けることがある
+	desc_label.text = "%s\n攻撃補正 x%.2f / 速度補正 x%.2f" % [
 		data["desc"], data["attack_mul"], data["speed_mul"]
 	]
 	_preview.figure_color = data["color"]

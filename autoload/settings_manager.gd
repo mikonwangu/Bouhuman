@@ -75,31 +75,41 @@ func apply_audio() -> void:
 func apply_display() -> void:
 	if browser_size not in BROWSER_SIZES:
 		browser_size = "medium"
+	# Web: 内部ウィンドウサイズを変えると入力座標がずれやすいので、
+	# CSS canvas サイズ変更のみ行う（DisplayServer は触らない）。
+	if OS.has_feature("web"):
+		if browser_size == "fullscreen":
+			JavaScriptBridge.eval(
+				"if (typeof window !== 'undefined' && window.BouhumanSetSize) {"
+				+ "window.BouhumanSetSize(window.innerWidth, window.innerHeight);}"
+			)
+		else:
+			var web_size: Vector2i = BROWSER_SIZES[browser_size]
+			JavaScriptBridge.eval(
+				"if (typeof window !== 'undefined' && window.BouhumanSetSize) { window.BouhumanSetSize(%d, %d); }"
+				% [web_size.x, web_size.y]
+			)
+		return
 	if browser_size == "fullscreen":
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 		return
 	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
 	var size: Vector2i = BROWSER_SIZES[browser_size]
 	DisplayServer.window_set_size(size)
-	# Web 向け: JS で canvas サイズを変えるフック（エクスポート時に有効）
-	if OS.has_feature("web"):
-		JavaScriptBridge.eval(
-			"if (typeof window !== 'undefined' && window.BouhumanSetSize) { window.BouhumanSetSize(%d, %d); }"
-			% [size.x, size.y]
-		)
 
 
 func apply_quality() -> void:
+	# Web では content_scale_factor を触るとクリック座標ずれが起きやすいため、
+	# 画質は FPS 上限のみで制御する（表示スケールは stretch 設定に任せる）。
+	if is_inside_tree() and get_tree().root:
+		get_tree().root.content_scale_factor = 1.0
 	match quality:
 		"low":
 			Engine.max_fps = 30
-			get_tree().root.content_scale_factor = 0.75
 		"mid":
 			Engine.max_fps = 60
-			get_tree().root.content_scale_factor = 1.0
 		"high":
 			Engine.max_fps = 0
-			get_tree().root.content_scale_factor = 1.0
 
 
 func save_settings() -> void:
@@ -138,11 +148,11 @@ func quality_label_ja() -> String:
 func browser_size_label_ja() -> String:
 	match browser_size:
 		"small":
-			return "小 (640×360)"
+			return "小 (640x360)"
 		"medium":
-			return "中 (960×540)"
+			return "中 (960x540)"
 		"large":
-			return "大 (1280×720)"
+			return "大 (1280x720)"
 		"fullscreen":
 			return "フルスクリーン"
 		_:
