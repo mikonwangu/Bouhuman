@@ -8,13 +8,7 @@ script = ExtResource("1_battle")
 [node name="Background" type="ColorRect" parent="."]
 offset_right = 960.0
 offset_bottom = 540.0
-color = Color(0.16, 0.18, 0.22, 1)
-
-[node name="Ground" type="ColorRect" parent="."]
-offset_top = 360.0
-offset_right = 960.0
-offset_bottom = 540.0
-color = Color(0.22, 0.24, 0.28, 1)
+color = Color(0.14, 0.16, 0.20, 1)
 
 [node name="Arena" type="Node2D" parent="."]
 unique_name_in_owner = true
