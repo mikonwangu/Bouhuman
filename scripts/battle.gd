@@ -42,9 +42,9 @@ var _pending_tier: String = ""
 var _pending_dmg: int = 0
 var _pending_reach: float = 0.0
 
-## キビキビ寄り
+## キビキビ寄り（重力はそのまま、ジャンプ初速だけ上げて到達高を伸ばす）
 const GRAVITY := 2800.0
-const JUMP_SPEED := -620.0
+const JUMP_SPEED := -740.0
 const AIR_DODGE_HEIGHT := 40.0
 const END_DELAY_SEC := 0.35
 const BASE_MOVE_SPEED := 280.0
