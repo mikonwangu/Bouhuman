@@ -1,9 +1,13 @@
 class_name StickFigure
 extends Node2D
 ## 棒人間。敵アーキタイプ／装備武器・必殺で見た目と攻撃エフェクトが変わる。
+## FIGHTER_SCALE で全体を少し小さく（描画と戦闘リーチを揃える前提）。
 
 enum AttackKind { NONE, WEAK, MID, STRONG, SPECIAL, HURT }
 enum Phase { IDLE, WINDUP, ACTIVE, RECOVERY }
+
+## 基準サイズからの縮小率（〜20%）。戦闘側の reach / 縦ヒット幅も同率で揃える。
+const FIGHTER_SCALE := 0.80
 
 @export var figure_color: Color = Color(0.9, 0.9, 0.85)
 @export var accent_color: Color = Color(1.0, 1.0, 1.0)
@@ -124,10 +128,10 @@ func _advance_phase() -> void:
 
 func _draw() -> void:
 	var c := figure_color
-	var s := body_scale
+	var s := body_scale * FIGHTER_SCALE
 	var f := facing
-	var w := line_width
-	var bob := sin(pose_phase) * 2.0
+	var w := maxf(1.5, line_width * FIGHTER_SCALE)
+	var bob := sin(pose_phase) * 2.0 * FIGHTER_SCALE
 	var lean := 0.0
 	var arm_l := Vector2(-22.0 * f, -5.0)
 	var arm_r := Vector2(20.0 * f, 0.0)
@@ -178,6 +182,7 @@ func _draw_weapon(origin: Vector2, arm_r: Vector2, s: float, f: float) -> void:
 	var hand := (origin + arm_r) * s
 	var dir := Vector2(f, 0).normalized()
 	var col := weapon_color
+	var lw := maxf(1.5, line_width * FIGHTER_SCALE)
 	match weapon_style:
 		"fist":
 			var r := 5.0 * s * (1.35 if bool(weapon_flags.get("thick_fist", false)) else 1.0)
@@ -186,7 +191,7 @@ func _draw_weapon(origin: Vector2, arm_r: Vector2, s: float, f: float) -> void:
 				draw_circle(hand + Vector2(0, -4) * s, r * 0.7, Color(1.0, 0.6, 0.2, 0.7))
 		"staff", "pipe":
 			var tip := hand + dir * (28.0 if weapon_style == "pipe" else 32.0) * s + Vector2(0, -4) * s
-			draw_line(hand, tip, col, line_width + (1.5 if weapon_style == "pipe" else 0.5))
+			draw_line(hand, tip, col, lw + (1.5 if weapon_style == "pipe" else 0.5) * FIGHTER_SCALE)
 		"blade":
 			var len := 36.0 if bool(weapon_flags.get("long", false)) else 26.0
 			var tip := hand + dir * len * s + Vector2(0, -6) * s
