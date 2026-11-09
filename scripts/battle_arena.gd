@@ -12,9 +12,12 @@ var spawn_enemy := Vector2(780, 320)
 const WORLD_LEFT := 40.0
 const WORLD_RIGHT := 920.0
 const FALL_Y := 560.0
-const FOOT_EPS := 6.0
+## 着地・接地の許容（高速落下のトンネル抜け防止も兼ねる）
+const FOOT_EPS := 10.0
 const VIEW_W := 960.0
 const VIEW_H := 540.0
+## 隣接足場の最大段差目安（battle.gd のジャンプ到達高と揃える）
+const MAX_STEP_RISE := 95.0
 
 ## 日本語向けレイアウト表示名（HUD 用）
 const LAYOUT_LABELS := {
@@ -61,40 +64,42 @@ func load_layout(layout: String) -> void:
 			spawn_player = Vector2(160, 380)
 			spawn_enemy = Vector2(820, 320)
 		"mid_bridge":
-			# 左右地面を中央の長い橋でつなぐ + 上段の小足場
+			# 左右地面を中央の長い橋でつなぐ + 上段の小足場（橋から1段）
 			_add(50, 280, 380, 40, "ground")
 			_add(250, 710, 300, 24, "bridge")
 			_add(680, 920, 380, 40, "ground")
-			_add(400, 560, 220, 22, "ledge")
+			# 左右地面から水平に離し、橋からの段差〜80pxに抑える
+			_add(450, 510, 220, 22, "ledge")
 			spawn_player = Vector2(140, 380)
 			spawn_enemy = Vector2(820, 380)
 		"twin_ledges":
-			# 中央低床 + 左右の高い出島（高低差戦）
-			_add(80, 300, 260, 28, "ledge")
+			# 中央低床 + 左右の高い出島（1ジャンプで届く高低差）
+			_add(80, 300, 285, 28, "ledge")
 			_add(320, 640, 380, 40, "ground")
-			_add(660, 900, 260, 28, "ledge")
+			_add(660, 900, 285, 28, "ledge")
 			_add(200, 320, 340, 22, "bridge")
 			_add(640, 760, 340, 22, "bridge")
-			spawn_player = Vector2(160, 260)
-			spawn_enemy = Vector2(800, 260)
+			spawn_player = Vector2(160, 285)
+			spawn_enemy = Vector2(800, 285)
 		"boss_towers":
-			# ボス: 左右タワー + 中央島 + ギャップ多め
+			# ボス: 左右タワー + 中央島。重なる足場の段差はジャンプ到達内に収める
 			_add(40, 260, 280, 36, "ground")
-			_add(300, 420, 360, 28, "bridge")
-			_add(460, 620, 240, 26, "ledge")
-			_add(660, 820, 360, 28, "bridge")
+			_add(300, 420, 330, 28, "bridge")
+			_add(460, 620, 250, 26, "ledge")
+			_add(660, 820, 330, 28, "bridge")
 			_add(780, 940, 280, 36, "ground")
-			_add(380, 540, 180, 22, "ledge")
+			# 最上段は橋からでも届く高さ（段差 ≤95）に揃える
+			_add(480, 600, 235, 22, "ledge")
 			spawn_player = Vector2(120, 280)
 			spawn_enemy = Vector2(860, 280)
 		"boss_pit":
-			# ボス: 深い中央ピットを橋と両翼で挟む
+			# ボス: 深い中央ピットを橋と両翼で挟む（上段は中継足場経由）
 			_add(40, 300, 360, 40, "ground")
-			_add(340, 460, 280, 24, "bridge")
-			_add(500, 660, 200, 22, "ledge")
-			_add(620, 760, 280, 24, "bridge")
+			_add(340, 460, 285, 24, "bridge")
+			_add(470, 560, 235, 22, "ledge")
+			_add(620, 760, 285, 24, "bridge")
 			_add(740, 940, 360, 40, "ground")
-			_add(420, 580, 320, 20, "bridge")
+			_add(400, 560, 325, 20, "bridge")
 			spawn_player = Vector2(140, 360)
 			spawn_enemy = Vector2(860, 360)
 		_:
@@ -286,6 +291,7 @@ func _draw_layout_caption() -> void:
 
 
 ## 落下中（vel_y>=0）に足場上面へ着地できるか。戻り: {landed, y, platform}
+## 上から抜けるワンウェイ足場。区間 [prev_y, pos.y] が上面を横切ったら着地。
 func try_land(pos: Vector2, prev_y: float, vel_y: float) -> Dictionary:
 	if vel_y < 0.0:
 		return {"landed": false, "y": pos.y, "platform": {}}
@@ -295,10 +301,10 @@ func try_land(pos: Vector2, prev_y: float, vel_y: float) -> Dictionary:
 		var left: float = p["left"]
 		var right: float = p["right"]
 		var top: float = p["top"]
-		if pos.x < left - 4.0 or pos.x > right + 4.0:
+		if pos.x < left - 6.0 or pos.x > right + 6.0:
 			continue
-		# 前フレームより上、今フレームで上面を横切る／乗る
-		if prev_y <= top + FOOT_EPS and pos.y >= top - FOOT_EPS:
+		# スイープ: 前フレームは上面より上（または僅かに下）、今フレームで上面以下
+		if prev_y <= top + FOOT_EPS and pos.y >= top:
 			if top < best_y:
 				best_y = top
 				best = p
@@ -312,11 +318,43 @@ func standing_on(pos: Vector2) -> Dictionary:
 		var left: float = p["left"]
 		var right: float = p["right"]
 		var top: float = p["top"]
-		if pos.x < left - 2.0 or pos.x > right + 2.0:
+		if pos.x < left - 6.0 or pos.x > right + 6.0:
 			continue
 		if absf(pos.y - top) <= FOOT_EPS:
 			return p
 	return {}
+
+
+## ジャンプ到達高（離散）内で、隣接足場へ登れるかのレイアウト健全性チェック用
+func max_adjacent_rise() -> float:
+	var worst := 0.0
+	for i in platforms.size():
+		var a: Dictionary = platforms[i]
+		for j in platforms.size():
+			if i == j:
+				continue
+			var b: Dictionary = platforms[j]
+			var rise: float = float(a["top"]) - float(b["top"])
+			if rise <= 0.0:
+				continue
+			# 水平に近い（ジャンプで渡れる距離）ものだけを隣接とみなす
+			var gap: float = _horizontal_gap(a, b)
+			if gap > 160.0:
+				continue
+			worst = maxf(worst, rise)
+	return worst
+
+
+func _horizontal_gap(a: Dictionary, b: Dictionary) -> float:
+	var a_l: float = a["left"]
+	var a_r: float = a["right"]
+	var b_l: float = b["left"]
+	var b_r: float = b["right"]
+	if a_r < b_l:
+		return b_l - a_r
+	if b_r < a_l:
+		return a_l - b_r
+	return 0.0
 
 
 func clamp_x(x: float, margin_left: float = 0.0, margin_right: float = 0.0) -> float:

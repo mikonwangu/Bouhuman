@@ -31,6 +31,7 @@ func _initialize() -> void:
 	ok = _check_catalogs() and ok
 	ok = _check_enemy_and_visuals() and ok
 	ok = _check_arena_layouts() and ok
+	ok = _check_platform_landing() and ok
 	ok = _check_reward_empty_drops() and ok
 	ok = _check_boss_special_pick() and ok
 	ok = _check_settings_fallback() and ok
@@ -160,6 +161,125 @@ func _check_arena_layouts() -> bool:
 	arena.free()
 	print("arena_layouts ", ids)
 	return true
+
+
+func _check_platform_landing() -> bool:
+	## ジャンプ到達高と着地スイープが上部足場に届くことを検証
+	var Battle = load("res://scripts/battle.gd")
+	var A = load("res://scripts/battle_arena.gd")
+	if Battle == null or A == null:
+		push_error("battle/arena load failed for landing check")
+		return false
+	# battle.gd の定数をソースから読めないため、同等の離散ピークを再計算
+	# JUMP_SPEED / GRAVITY は battle.gd と同期させること
+	var jump_speed := -820.0
+	var gravity := 2800.0
+	var dt := 1.0 / 60.0
+	var peak := _discrete_jump_peak(jump_speed, gravity, dt)
+	if peak < 100.0:
+		push_error("jump peak too low: %.1f (need >=100 for upper platforms)" % peak)
+		return false
+	var arena: Node2D = A.new()
+	var ids: Array[String] = ["split_gap", "step_up", "mid_bridge", "twin_ledges", "boss_towers", "boss_pit"]
+	for lid in ids:
+		arena.load_layout(lid)
+		var worst: float = arena.max_adjacent_rise()
+		if worst > peak + 1.0:
+			push_error("layout %s adjacent rise %.1f exceeds jump peak %.1f" % [lid, worst, peak])
+			arena.free()
+			return false
+		if worst > float(A.MAX_STEP_RISE) + 1.0:
+			push_error("layout %s rise %.1f exceeds MAX_STEP_RISE" % [lid, worst])
+			arena.free()
+			return false
+		# スポーン床から一段上の足場へ、実際の try_land スイープで着地できること
+		if not _sim_land_on_upper(arena, jump_speed, gravity, dt):
+			push_error("landing sim failed for " + lid)
+			arena.free()
+			return false
+	arena.free()
+	print("platform_landing peak=", snapped(peak, 0.1), " layouts_ok")
+	return true
+
+
+func _discrete_jump_peak(jump_speed: float, gravity: float, dt: float) -> float:
+	var y := 0.0
+	var vel := jump_speed
+	var min_y := 0.0
+	for _i in 300:
+		vel += gravity * dt
+		y += vel * dt
+		min_y = minf(min_y, y)
+		if vel > 0.0 and y > min_y + 1.0:
+			break
+	return -min_y
+
+
+func _sim_land_on_upper(arena: Node2D, jump_speed: float, gravity: float, dt: float) -> bool:
+	var spawn: Vector2 = arena.spawn_player
+	var base: Dictionary = arena.standing_on(spawn)
+	if base.is_empty():
+		# スポーンを足場上面に吸着
+		spawn.y = float(arena.platforms[0]["top"])
+		base = arena.standing_on(spawn)
+	if base.is_empty():
+		push_error("spawn not on platform")
+		return false
+	# 隣接する一段上の足場へジャンプ着地を試す
+	var target: Dictionary = {}
+	var best_rise := 0.0
+	for p in arena.platforms:
+		var rise: float = float(base["top"]) - float(p["top"])
+		if rise < 20.0 or rise > 95.0:
+			continue
+		var gap: float = 0.0
+		var a_r: float = float(base["right"])
+		var a_l: float = float(base["left"])
+		var b_l: float = float(p["left"])
+		var b_r: float = float(p["right"])
+		if a_r < b_l:
+			gap = b_l - a_r
+		elif b_r < a_l:
+			gap = a_l - b_r
+		if gap > 160.0:
+			continue
+		if rise > best_rise:
+			best_rise = rise
+			target = p
+	if target.is_empty():
+		# スポーン直上に上段が無い場合は、全体の最高段差足場で着地だけ確認
+		for p in arena.platforms:
+			var rise2: float = float(base["top"]) - float(p["top"])
+			if rise2 >= 20.0 and rise2 <= 95.0:
+				target = p
+				break
+	if target.is_empty():
+		return true
+	var tx: float = (float(target["left"]) + float(target["right"])) * 0.5
+	# 足場直下の低い床から跳ぶ（水平移動なし）
+	var from_y: float = float(base["top"])
+	# ターゲット直下に別の低い足場があればそこを使用
+	for p in arena.platforms:
+		if tx < float(p["left"]) - 6.0 or tx > float(p["right"]) + 6.0:
+			continue
+		var t: float = float(p["top"])
+		if t > float(target["top"]) + 15.0 and t <= from_y + 1.0:
+			from_y = t
+	var pos := Vector2(tx, from_y)
+	var vel := jump_speed
+	for _i in 180:
+		var prev_y := pos.y
+		vel += gravity * dt
+		pos.y += vel * dt
+		pos.x = tx
+		var land: Dictionary = arena.try_land(pos, prev_y, vel)
+		if bool(land.get("landed", false)):
+			var top: float = float(land["y"])
+			if absf(top - float(target["top"])) <= 1.0:
+				return true
+			if top < from_y - 10.0:
+				return true
+	return false
 
 
 func _check_reward_empty_drops() -> bool:

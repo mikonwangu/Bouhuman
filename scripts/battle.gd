@@ -42,9 +42,10 @@ var _pending_tier: String = ""
 var _pending_dmg: int = 0
 var _pending_reach: float = 0.0
 
-## キビキビ寄り
+## キビキビ寄り。離散積分でも隣接足場（〜95px）を余裕で超えられる初速。
+## ピーク高 ≈ v²/(2g) ≒ 120px（60fps 離散では約 113px）
 const GRAVITY := 2800.0
-const JUMP_SPEED := -620.0
+const JUMP_SPEED := -820.0
 const AIR_DODGE_HEIGHT := 40.0
 const END_DELAY_SEC := 0.35
 const BASE_MOVE_SPEED := 280.0
