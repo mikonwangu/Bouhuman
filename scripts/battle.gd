@@ -41,6 +41,7 @@ var _enemy_kb := Vector2.ZERO
 var _pending_tier: String = ""
 var _pending_dmg: int = 0
 var _pending_reach: float = 0.0
+var _cam: Camera2D
 
 ## キビキビ寄り。離散積分でも隣接足場（〜95px）を余裕で超えられる初速。
 ## ピーク高 ≈ v²/(2g) ≒ 120px（60fps 離散では約 113px）
@@ -93,6 +94,12 @@ func _ready() -> void:
 	_stage.load_layout(layout)
 	_player_pos = _stage.spawn_player
 	_enemy_pos = _stage.spawn_enemy
+
+	# ワールドが画面より広いので、両者の中間を追うカメラ
+	_cam = Camera2D.new()
+	_cam.enabled = true
+	arena.add_child(_cam)
+	_update_camera()
 
 	var wvis: Dictionary = CombatVisualsScript.weapon_style(str(_weapon.get("id", "W-N1")))
 	_weapon_reach_bonus = float(wvis.get("reach_bonus", 0.0))
@@ -168,8 +175,20 @@ func _process(delta: float) -> void:
 		return
 	_player.position = _player_pos
 	_enemy.position = _enemy_pos
+	_update_camera()
 	player_hp_bar.value = GameState.hp
 	enemy_hp_bar.value = _enemy_hp
+
+
+func _update_camera() -> void:
+	if _cam == null or _stage == null:
+		return
+	var half_w := BattleArenaScript.VIEW_W * 0.5
+	var half_h := BattleArenaScript.VIEW_H * 0.5
+	var focus_x := (_player_pos.x + _enemy_pos.x) * 0.5
+	var cx := clampf(focus_x, half_w, BattleArenaScript.WORLD_W - half_w)
+	_cam.position = Vector2(cx, half_h)
+	_stage.set_view_left(cx - half_w)
 
 
 func _handle_move(delta: float) -> void:
