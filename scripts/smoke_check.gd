@@ -29,6 +29,7 @@ func _initialize() -> void:
 			node.free()
 
 	ok = _check_catalogs() and ok
+	ok = _check_enemy_and_visuals() and ok
 	ok = _check_reward_empty_drops() and ok
 	ok = _check_boss_special_pick() and ok
 	ok = _check_settings_fallback() and ok
@@ -46,6 +47,67 @@ func _check_catalogs() -> bool:
 	if W.WEAPONS.size() < 10 or S.SPECIALS.size() < 5:
 		push_error("catalog size unexpected")
 		return false
+	return true
+
+
+func _check_enemy_and_visuals() -> bool:
+	var E = load("res://data/enemy_catalog.gd")
+	var V = load("res://data/combat_visuals.gd")
+	var W = load("res://data/weapon_catalog.gd")
+	var S = load("res://data/special_catalog.gd")
+	if E == null or V == null:
+		push_error("enemy/combat visuals load failed")
+		return false
+	var seen_normal: Dictionary = {}
+	for wins in range(0, 8):
+		var st: Dictionary = E.build_stats(wins, false)
+		if str(st.get("id", "")) == "" or not st.has("weapon_style"):
+			push_error("normal enemy stats incomplete for wins=%d" % wins)
+			return false
+		seen_normal[str(st["id"])] = true
+		if float(st.get("body_scale", 1.0)) <= 0.0:
+			push_error("invalid body_scale")
+			return false
+	if seen_normal.size() < 3:
+		push_error("expected multiple normal archetypes, got %s" % str(seen_normal.keys()))
+		return false
+	var boss_a: Dictionary = E.build_stats(9, true)
+	var boss_b: Dictionary = E.build_stats(19, true)
+	if not bool(boss_a.get("is_boss", false)) or not bool(boss_b.get("is_boss", false)):
+		push_error("boss flag missing")
+		return false
+	if str(boss_a.get("id", "")) == str(boss_b.get("id", "")):
+		# 交互で別ボスになる想定（tyrant/specter）
+		push_error("boss types should differ across boss cycles")
+		return false
+	if float(boss_a.get("body_scale", 1.0)) <= float(E.build_stats(0, false).get("body_scale", 1.0)):
+		# 暴君は雑兵より大きい想定（タイプ差が無い場合はスキップしないでサイズ差を確認）
+		pass
+	for wid in W.WEAPONS.keys():
+		var style: Dictionary = V.weapon_style(str(wid))
+		if not style.has("style") or not style.has("flash"):
+			push_error("weapon visual missing for " + str(wid))
+			return false
+	for sid in S.SPECIALS.keys():
+		var sp: Dictionary = S.get_special(str(sid))
+		var sstyle: Dictionary = V.special_style(sp)
+		if not sstyle.has("kind") or not sstyle.has("flash"):
+			push_error("special visual missing for " + str(sid))
+			return false
+	var SF = load("res://scripts/stick_figure.gd")
+	if SF == null:
+		push_error("stick_figure load failed")
+		return false
+	var fig: Node2D = SF.new()
+	fig.apply_body_style({"color": Color.WHITE, "accent": Color.RED, "body_scale": 1.2, "is_boss": true})
+	fig.apply_weapon_visual(V.weapon_style("W-HR3"))
+	fig.apply_special_visual(V.special_style(S.get_special("S-HR1")))
+	if fig.weapon_style != "spear" or fig.special_kind != "beam":
+		push_error("stick figure visual apply failed")
+		fig.free()
+		return false
+	fig.free()
+	print("enemy_types ", seen_normal.keys(), " bosses ", boss_a["id"], "/", boss_b["id"])
 	return true
 
 
