@@ -79,7 +79,7 @@ func _ready() -> void:
 	_enemy_interval = float(enemy["attack_interval"])
 	_enemy_move_speed = 140.0 * float(enemy.get("move_mul", 1.0))
 	_enemy_jump_bias = float(enemy.get("jump_bias", 0.35))
-	_enemy_reach = 70.0 * float(enemy.get("reach_mul", 1.0))
+	_enemy_reach = _fs(70.0) * float(enemy.get("reach_mul", 1.0))
 	_enemy_attack_kind = str(enemy.get("attack_kind", "mid"))
 	_move_speed = BASE_MOVE_SPEED * float(_char_data["speed_mul"])
 
@@ -102,7 +102,7 @@ func _ready() -> void:
 	_update_camera()
 
 	var wvis: Dictionary = CombatVisualsScript.weapon_style(str(_weapon.get("id", "W-N1")))
-	_weapon_reach_bonus = float(wvis.get("reach_bonus", 0.0))
+	_weapon_reach_bonus = _fs(float(wvis.get("reach_bonus", 0.0)))
 	var svis: Dictionary = CombatVisualsScript.special_style(GameState.get_equipped_special())
 
 	_player = StickFigureScript.new()
@@ -189,6 +189,11 @@ func _update_camera() -> void:
 	var cx := clampf(focus_x, half_w, BattleArenaScript.WORLD_W - half_w)
 	_cam.position = Vector2(cx, half_h)
 	_stage.set_view_left(cx - half_w)
+
+
+## 棒人間の見た目スケールに合わせてリーチ／縦ヒット幅を揃える
+func _fs(v: float) -> float:
+	return v * StickFigure.FIGHTER_SCALE
 
 
 func _handle_move(delta: float) -> void:
@@ -343,7 +348,7 @@ func _do_weapon_attack(tier: String) -> void:
 		return
 	var atk: Dictionary = _weapon[tier]
 	var dmg := int(round(float(atk["damage"]) * float(_char_data["attack_mul"])))
-	var reach: float = float(atk["reach"]) + _weapon_reach_bonus * 0.35
+	var reach: float = _fs(float(atk["reach"])) + _weapon_reach_bonus * 0.35
 	var weapon_cd := float(atk["cooldown"]) / maxf(0.5, float(_char_data["speed_mul"]))
 	_attack_cd = maxf(weapon_cd, _motion_total(tier) * 0.85)
 	_pending_tier = tier
@@ -379,17 +384,17 @@ func _do_special() -> void:
 	var kind := str(sp.get("kind", "projectile"))
 	match kind:
 		"melee", "melee_multi":
-			_pending_reach = 90.0
+			_pending_reach = _fs(90.0)
 		"ground":
-			_pending_reach = 160.0
+			_pending_reach = _fs(160.0)
 		"beam", "multi_hit":
-			_pending_reach = 280.0
+			_pending_reach = _fs(280.0)
 		"explode", "delayed_double":
-			_pending_reach = 200.0
+			_pending_reach = _fs(200.0)
 		"projectile_up":
-			_pending_reach = 180.0
+			_pending_reach = _fs(180.0)
 		_:
-			_pending_reach = 220.0
+			_pending_reach = _fs(220.0)
 	var svis: Dictionary = CombatVisualsScript.special_style(sp)
 	_player.apply_special_visual(svis)
 	var m: Dictionary = MOTION["special"]
@@ -415,11 +420,11 @@ func _on_player_attack_active() -> void:
 	var hit := false
 	if tier == "special":
 		var sp_kind := str(GameState.get_equipped_special().get("kind", "projectile"))
-		var vert_ok := 140.0 if sp_kind == "projectile_up" else 120.0
+		var vert_ok := _fs(140.0) if sp_kind == "projectile_up" else _fs(120.0)
 		if sp_kind == "ground":
-			vert_ok = 70.0
+			vert_ok = _fs(70.0)
 		hit = dist <= reach and vert < vert_ok
-	elif dist <= reach and vert < 90.0:
+	elif dist <= reach and vert < _fs(90.0):
 		hit = true
 	if hit:
 		_apply_knockback_to_enemy(tier)
@@ -492,7 +497,7 @@ func _enemy_ai(delta: float) -> void:
 			_try_jump(false)
 		elif (
 			_enemy_on_ground
-			and _player_pos.y + 28.0 < _enemy_pos.y
+			and _player_pos.y + _fs(28.0) < _enemy_pos.y
 			and randf() < _enemy_jump_bias * delta * 3.0
 		):
 			_try_jump(false)
@@ -504,7 +509,7 @@ func _enemy_ai(delta: float) -> void:
 		return
 	var dist := absf(_enemy_pos.x - _player_pos.x)
 	var vert := absf(_enemy_pos.y - _player_pos.y)
-	if dist > _enemy_reach or vert > 80.0:
+	if dist > _enemy_reach or vert > _fs(80.0):
 		return
 	var height := _enemy_pos.y - _player_pos.y  # プレイヤーが上なら正寄り
 	var tier := _enemy_attack_kind
@@ -530,7 +535,7 @@ func _on_enemy_attack_active() -> void:
 		return
 	var dist := absf(_enemy_pos.x - _player_pos.x)
 	var vert := absf(_enemy_pos.y - _player_pos.y)
-	if dist > _enemy_reach + 10.0 or vert > 80.0:
+	if dist > _enemy_reach + _fs(10.0) or vert > _fs(80.0):
 		_log("敵の攻撃を回避！")
 		return
 	_apply_knockback_to_player()
