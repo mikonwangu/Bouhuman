@@ -81,6 +81,11 @@ func _ready() -> void:
 	_enemy_attack_kind = str(enemy.get("attack_kind", "mid"))
 	_move_speed = BASE_MOVE_SPEED * float(_char_data["speed_mul"])
 
+	# アリーナ側で空〜ピットを描くので、単色背景は隠す
+	var bg := get_node_or_null("Background")
+	if bg is CanvasItem:
+		(bg as CanvasItem).visible = false
+
 	_stage = BattleArenaScript.new()
 	var layout: String = BattleArenaScript.pick_layout_id(GameState.wins, bool(enemy.get("is_boss", false)))
 	arena.add_child(_stage)
@@ -124,7 +129,9 @@ func _ready() -> void:
 	enemy_hp_bar.value = _enemy_hp
 	_refresh_status(layout, str(enemy.get("name", "敵")))
 	_log("戦闘開始！ %s / 武器:%s 必殺:%s" % [
-		layout, str(_weapon.get("name", "?")), str(GameState.get_equipped_special().get("name", "?"))
+		BattleArenaScript.layout_label(layout),
+		str(_weapon.get("name", "?")),
+		str(GameState.get_equipped_special().get("name", "?")),
 	])
 
 
@@ -134,8 +141,9 @@ func _refresh_status(layout: String = "", enemy_name: String = "敵") -> void:
 		lay = str(_stage.layout_id)
 	if lay == "":
 		lay = "?"
-	status_label.text = "%s vs %s | 必殺残 %d | ステージ %s | Spaceジャンプ" % [
-		_char_data["name"], enemy_name, GameState.special_uses, lay
+	var lay_name: String = BattleArenaScript.layout_label(lay)
+	status_label.text = "%s vs %s | 必殺残 %d | %s | Spaceジャンプ" % [
+		_char_data["name"], enemy_name, GameState.special_uses, lay_name
 	]
 
 
