@@ -262,21 +262,5 @@ func equip_special(special_id: String) -> void:
 
 
 func enemy_stats_for_current_fight() -> Dictionary:
-	var boss := is_boss_upcoming()
-	if boss:
-		return {
-			"name": "強敵ボス",
-			"max_hp": 140 + wins * 3,
-			"damage": 12 + wins / 5,
-			"attack_interval": 0.95,
-			"color": Color(0.75, 0.15, 0.2),
-			"is_boss": true,
-		}
-	return {
-		"name": "敵 %d" % (wins + 1),
-		"max_hp": 48 + wins * 6,
-		"damage": 6 + wins / 4,
-		"attack_interval": 1.05,
-		"color": Color(0.55, 0.45, 0.4),
-		"is_boss": false,
-	}
+	const EnemyCatalogScript = preload("res://data/enemy_catalog.gd")
+	return EnemyCatalogScript.build_stats(wins, is_boss_upcoming())
