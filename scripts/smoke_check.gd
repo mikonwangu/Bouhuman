@@ -108,8 +108,13 @@ func _check_enemy_and_visuals() -> bool:
 		push_error("stick figure visual apply failed")
 		fig.free()
 		return false
+	var fscale: float = float(SF.FIGHTER_SCALE)
+	if fscale < 0.75 or fscale > 0.90:
+		push_error("FIGHTER_SCALE out of modest shrink range: %s" % str(fscale))
+		fig.free()
+		return false
 	fig.free()
-	print("enemy_types ", seen_normal.keys(), " bosses ", boss_a["id"], "/", boss_b["id"])
+	print("enemy_types ", seen_normal.keys(), " bosses ", boss_a["id"], "/", boss_b["id"], " fighter_scale=", fscale)
 	return true
 
 
