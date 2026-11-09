@@ -30,6 +30,7 @@ func _initialize() -> void:
 
 	ok = _check_catalogs() and ok
 	ok = _check_enemy_and_visuals() and ok
+	ok = _check_arena_layouts() and ok
 	ok = _check_reward_empty_drops() and ok
 	ok = _check_boss_special_pick() and ok
 	ok = _check_settings_fallback() and ok
@@ -108,6 +109,56 @@ func _check_enemy_and_visuals() -> bool:
 		return false
 	fig.free()
 	print("enemy_types ", seen_normal.keys(), " bosses ", boss_a["id"], "/", boss_b["id"])
+	return true
+
+
+func _check_arena_layouts() -> bool:
+	var A = load("res://scripts/battle_arena.gd")
+	if A == null:
+		push_error("battle_arena load failed")
+		return false
+	var ids: Array[String] = ["split_gap", "step_up", "mid_bridge", "twin_ledges", "boss_towers", "boss_pit", "flat_gap"]
+	var arena: Node2D = A.new()
+	for lid in ids:
+		arena.load_layout(lid)
+		if arena.platforms.is_empty():
+			push_error("arena layout empty: " + lid)
+			arena.free()
+			return false
+		for p in arena.platforms:
+			if not p.has("kind") or not p.has("left") or not p.has("top"):
+				push_error("arena platform incomplete in " + lid)
+				arena.free()
+				return false
+			var kind := str(p["kind"])
+			if kind not in ["ground", "bridge", "ledge"]:
+				push_error("unknown platform kind in " + lid + ": " + kind)
+				arena.free()
+				return false
+		var label: String = A.layout_label(lid)
+		if label == "" or label == null:
+			push_error("layout_label missing for " + lid)
+			arena.free()
+			return false
+		# スポーンはワールド内
+		if arena.spawn_player.x < A.WORLD_LEFT or arena.spawn_enemy.x > A.WORLD_RIGHT:
+			push_error("spawn out of world in " + lid)
+			arena.free()
+			return false
+	# ローテが通常／ボスで分かれること
+	var n0: String = A.pick_layout_id(0, false)
+	var n1: String = A.pick_layout_id(1, false)
+	var b0: String = A.pick_layout_id(9, true)
+	if n0 == n1:
+		push_error("normal layout rotation stuck")
+		arena.free()
+		return false
+	if not str(b0).begins_with("boss_"):
+		push_error("boss layout expected, got " + b0)
+		arena.free()
+		return false
+	arena.free()
+	print("arena_layouts ", ids)
 	return true
 
 

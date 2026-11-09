@@ -1,8 +1,9 @@
 class_name BattleArena
 extends Node2D
 ## 横スクロール風の短いアリーナ。複数レイアウトを win 数 / ボスで切替。
+## 足場・ピット・スポーン位置がすぐ読めるよう、シルエットと対比を優先して描画する。
 
-## 足場: { "left": float, "right": float, "top": float, "thick": float }
+## 足場: { "left","right","top","thick","kind" }  kind = ground | bridge | ledge
 var platforms: Array[Dictionary] = []
 var layout_id: String = "flat_gap"
 var spawn_player := Vector2(160, 320)
@@ -12,6 +13,19 @@ const WORLD_LEFT := 40.0
 const WORLD_RIGHT := 920.0
 const FALL_Y := 560.0
 const FOOT_EPS := 6.0
+const VIEW_W := 960.0
+const VIEW_H := 540.0
+
+## 日本語向けレイアウト表示名（HUD 用）
+const LAYOUT_LABELS := {
+	"split_gap": "左右島＋中央ギャップ",
+	"step_up": "段差階段",
+	"mid_bridge": "中央の橋",
+	"twin_ledges": "高低の出島",
+	"boss_towers": "ボス・双塔",
+	"boss_pit": "ボス・深坑",
+	"flat_gap": "平床",
+}
 
 
 static func pick_layout_id(wins: int, is_boss: bool) -> String:
@@ -23,94 +37,252 @@ static func pick_layout_id(wins: int, is_boss: bool) -> String:
 	return normal_ids[wins % normal_ids.size()]
 
 
+static func layout_label(layout: String) -> String:
+	return str(LAYOUT_LABELS.get(layout, layout))
+
+
 func load_layout(layout: String) -> void:
 	layout_id = layout
 	platforms.clear()
 	match layout:
 		"split_gap":
 			# 左右の地面 + 中央ギャップ（ジャンプ必須）+ 低めの足場
-			_add(60, 360, 360, 40)
-			_add(420, 540, 300, 28)
-			_add(600, 900, 360, 40)
+			_add(60, 360, 360, 40, "ground")
+			_add(420, 540, 300, 28, "bridge")
+			_add(600, 900, 360, 40, "ground")
 			spawn_player = Vector2(180, 360)
 			spawn_enemy = Vector2(760, 360)
 		"step_up":
 			# 左低 → 中段 → 右高の階段状
-			_add(60, 340, 380, 40)
-			_add(300, 560, 300, 28)
-			_add(520, 780, 240, 28)
-			_add(740, 920, 320, 36)
+			_add(60, 340, 380, 40, "ground")
+			_add(300, 560, 300, 28, "bridge")
+			_add(520, 780, 240, 28, "ledge")
+			_add(740, 920, 320, 36, "ground")
 			spawn_player = Vector2(160, 380)
 			spawn_enemy = Vector2(820, 320)
 		"mid_bridge":
 			# 左右地面を中央の長い橋でつなぐ + 上段の小足場
-			_add(50, 280, 380, 40)
-			_add(250, 710, 300, 24)
-			_add(680, 920, 380, 40)
-			_add(400, 560, 220, 22)
+			_add(50, 280, 380, 40, "ground")
+			_add(250, 710, 300, 24, "bridge")
+			_add(680, 920, 380, 40, "ground")
+			_add(400, 560, 220, 22, "ledge")
 			spawn_player = Vector2(140, 380)
 			spawn_enemy = Vector2(820, 380)
 		"twin_ledges":
 			# 中央低床 + 左右の高い出島（高低差戦）
-			_add(80, 300, 260, 28)
-			_add(320, 640, 380, 40)
-			_add(660, 900, 260, 28)
-			_add(200, 320, 340, 22)
-			_add(640, 760, 340, 22)
+			_add(80, 300, 260, 28, "ledge")
+			_add(320, 640, 380, 40, "ground")
+			_add(660, 900, 260, 28, "ledge")
+			_add(200, 320, 340, 22, "bridge")
+			_add(640, 760, 340, 22, "bridge")
 			spawn_player = Vector2(160, 260)
 			spawn_enemy = Vector2(800, 260)
 		"boss_towers":
 			# ボス: 左右タワー + 中央島 + ギャップ多め
-			_add(40, 260, 280, 36)
-			_add(300, 420, 360, 28)
-			_add(460, 620, 240, 26)
-			_add(660, 820, 360, 28)
-			_add(780, 940, 280, 36)
-			_add(380, 540, 180, 22)
+			_add(40, 260, 280, 36, "ground")
+			_add(300, 420, 360, 28, "bridge")
+			_add(460, 620, 240, 26, "ledge")
+			_add(660, 820, 360, 28, "bridge")
+			_add(780, 940, 280, 36, "ground")
+			_add(380, 540, 180, 22, "ledge")
 			spawn_player = Vector2(120, 280)
 			spawn_enemy = Vector2(860, 280)
 		"boss_pit":
 			# ボス: 深い中央ピットを橋と両翼で挟む
-			_add(40, 300, 360, 40)
-			_add(340, 460, 280, 24)
-			_add(500, 660, 200, 22)
-			_add(620, 760, 280, 24)
-			_add(740, 940, 360, 40)
-			_add(420, 580, 320, 20)
+			_add(40, 300, 360, 40, "ground")
+			_add(340, 460, 280, 24, "bridge")
+			_add(500, 660, 200, 22, "ledge")
+			_add(620, 760, 280, 24, "bridge")
+			_add(740, 940, 360, 40, "ground")
+			_add(420, 580, 320, 20, "bridge")
 			spawn_player = Vector2(140, 360)
 			spawn_enemy = Vector2(860, 360)
 		_:
-			_add(60, 900, 360, 40)
+			layout_id = "flat_gap"
+			_add(60, 900, 360, 40, "ground")
 			spawn_player = Vector2(200, 360)
 			spawn_enemy = Vector2(760, 360)
-	_rebuild_visuals()
+	queue_redraw()
 
 
-func _add(left: float, right: float, top: float, thick: float) -> void:
-	platforms.append({"left": left, "right": right, "top": top, "thick": thick})
+func _add(left: float, right: float, top: float, thick: float, kind: String = "ground") -> void:
+	platforms.append({
+		"left": left,
+		"right": right,
+		"top": top,
+		"thick": thick,
+		"kind": kind,
+	})
 
 
-func _rebuild_visuals() -> void:
-	for c in get_children():
-		c.queue_free()
-	# ピット背景（下層）
-	var pit := ColorRect.new()
-	pit.color = Color(0.10, 0.11, 0.14, 1)
-	pit.position = Vector2(0, 400)
-	pit.size = Vector2(960, 160)
-	add_child(pit)
+func _draw() -> void:
+	_draw_sky_and_depth()
+	_draw_pit_and_hazards()
+	_draw_platforms()
+	_draw_spawn_cues()
+	_draw_layout_caption()
+
+
+func _draw_sky_and_depth() -> void:
+	# 空〜地平のグラデーション（上明るめ／下暗め）で床との境界をはっきりさせる
+	var bands := 12
+	for i in bands:
+		var t := float(i) / float(bands - 1)
+		var c := Color(0.22, 0.34, 0.42, 1.0).lerp(Color(0.10, 0.14, 0.18, 1.0), t)
+		var y0 := VIEW_H * float(i) / float(bands)
+		var y1 := VIEW_H * float(i + 1) / float(bands)
+		draw_rect(Rect2(0.0, y0, VIEW_W, y1 - y0 + 1.0), c)
+
+	# 遠景シルエット（パララックス風・装飾のみ、当たり判定なし）
+	var far := Color(0.08, 0.12, 0.16, 0.55)
+	draw_rect(Rect2(40, 310, 110, 90), far)
+	draw_rect(Rect2(180, 280, 70, 120), far)
+	draw_rect(Rect2(280, 300, 140, 100), far)
+	draw_rect(Rect2(520, 270, 90, 130), far)
+	draw_rect(Rect2(680, 295, 120, 105), far)
+	draw_rect(Rect2(840, 285, 80, 115), far)
+
+	# 地平線の薄い帯
+	draw_rect(Rect2(0.0, 395.0, VIEW_W, 3.0), Color(0.35, 0.48, 0.55, 0.35))
+
+
+func _draw_pit_and_hazards() -> void:
+	# 落下域（ピット）本体
+	draw_rect(Rect2(0.0, 400.0, VIEW_W, VIEW_H - 400.0), Color(0.06, 0.07, 0.09, 1.0))
+
+	# 斜めハッチで「落ちる場所」を示す
+	var hatch := Color(0.55, 0.22, 0.18, 0.28)
+	var y0 := 405.0
+	var y1 := VIEW_H - 8.0
+	var x := -40.0
+	while x < VIEW_W + 40.0:
+		draw_line(Vector2(x, y0), Vector2(x + 55.0, y1), hatch, 2.0)
+		x += 28.0
+
+	# ピット上縁の危険ライン
+	draw_rect(Rect2(0.0, 400.0, VIEW_W, 4.0), Color(0.78, 0.32, 0.22, 0.85))
+	draw_rect(Rect2(0.0, 404.0, VIEW_W, 2.0), Color(0.95, 0.55, 0.30, 0.35))
+
+	# 同高度の足場間ギャップ直下に落下マーカー（他足場で埋まっている隙間は除外）
+	for i in platforms.size():
+		for j in range(i + 1, platforms.size()):
+			var a: Dictionary = platforms[i]
+			var b: Dictionary = platforms[j]
+			# 高低差があっても横に抜けられる隙間は落とす（橋の脇など）
+			if absf(float(a["top"]) - float(b["top"])) > 120.0:
+				continue
+			var a_right: float = float(a["right"])
+			var a_left: float = float(a["left"])
+			var b_right: float = float(b["right"])
+			var b_left: float = float(b["left"])
+			var gap_l: float
+			var gap_r: float
+			if a_right < b_left:
+				gap_l = a_right
+				gap_r = b_left
+			elif b_right < a_left:
+				gap_l = b_right
+				gap_r = a_left
+			else:
+				continue
+			var gap := gap_r - gap_l
+			if gap < 28.0:
+				continue
+			var mid := (gap_l + gap_r) * 0.5
+			# 真上に別足場がある中央ギャップはマーカー不要（橋本体の下など）
+			if _x_has_platform(mid):
+				continue
+			_draw_gap_chevron(mid, 412.0, minf(gap * 0.45, 40.0))
+
+
+func _x_has_platform(x: float) -> bool:
 	for p in platforms:
-		var rect := ColorRect.new()
-		rect.color = Color(0.28, 0.32, 0.38, 1)
-		rect.position = Vector2(float(p["left"]), float(p["top"]))
-		rect.size = Vector2(float(p["right"]) - float(p["left"]), float(p["thick"]))
-		add_child(rect)
-		# 上面ハイライト
-		var lip := ColorRect.new()
-		lip.color = Color(0.42, 0.48, 0.55, 1)
-		lip.position = Vector2(float(p["left"]), float(p["top"]))
-		lip.size = Vector2(float(p["right"]) - float(p["left"]), 4)
-		add_child(lip)
+		if x >= float(p["left"]) - 2.0 and x <= float(p["right"]) + 2.0:
+			return true
+	return false
+
+
+func _draw_gap_chevron(cx: float, y: float, half_w: float) -> void:
+	var col := Color(0.92, 0.45, 0.28, 0.75)
+	draw_line(Vector2(cx - half_w, y), Vector2(cx, y + 14.0), col, 2.5)
+	draw_line(Vector2(cx + half_w, y), Vector2(cx, y + 14.0), col, 2.5)
+	draw_line(Vector2(cx - half_w * 0.65, y + 10.0), Vector2(cx, y + 22.0), col, 2.0)
+	draw_line(Vector2(cx + half_w * 0.65, y + 10.0), Vector2(cx, y + 22.0), col, 2.0)
+
+
+func _draw_platforms() -> void:
+	for p in platforms:
+		var left: float = p["left"]
+		var right: float = p["right"]
+		var top: float = p["top"]
+		var thick: float = p["thick"]
+		var kind: String = str(p.get("kind", "ground"))
+		var w := right - left
+		var body: Color
+		var lip: Color
+		var shade: Color
+		match kind:
+			"bridge":
+				# 冷色の橋 — 空より明るく、地面と色相が違う
+				body = Color(0.38, 0.52, 0.60, 1.0)
+				lip = Color(0.78, 0.92, 0.98, 1.0)
+				shade = Color(0.16, 0.24, 0.28, 1.0)
+			"ledge":
+				# 黄緑の出島 — 高所の目印
+				body = Color(0.42, 0.48, 0.30, 1.0)
+				lip = Color(0.90, 0.95, 0.55, 1.0)
+				shade = Color(0.20, 0.22, 0.12, 1.0)
+			_:
+				# ground: 暖色の石床 — 空の青緑と対比
+				body = Color(0.58, 0.46, 0.34, 1.0)
+				lip = Color(0.98, 0.90, 0.70, 1.0)
+				shade = Color(0.26, 0.18, 0.12, 1.0)
+
+		# 影（接地感）
+		draw_rect(Rect2(left + 3.0, top + thick - 2.0, w, 8.0), Color(0, 0, 0, 0.28))
+		# 本体
+		draw_rect(Rect2(left, top, w, thick), body)
+		# 下縁の暗帯で厚みを出す
+		draw_rect(Rect2(left, top + thick - 5.0, w, 5.0), shade)
+		# 上面ハイライト（着地ライン）
+		draw_rect(Rect2(left, top, w, 5.0), lip)
+		# 外側アウトライン（シルエット）
+		var outline := Color(0.05, 0.05, 0.07, 0.95)
+		draw_rect(Rect2(left, top, w, thick), outline, false, 2.0)
+		# 端の落差マーカー（ギャップ境界）
+		var tick := Color(0.98, 0.92, 0.75, 0.95)
+		draw_rect(Rect2(left - 2.0, top - 6.0, 4.0, 12.0), tick)
+		draw_rect(Rect2(right - 2.0, top - 6.0, 4.0, 12.0), tick)
+
+
+func _draw_spawn_cues() -> void:
+	# スポーン足元の薄い色帯のみ（緑=自側 / 赤=敵側）。文字は付けずノイズを抑える。
+	_draw_spawn_pad(spawn_player, Color(0.35, 0.85, 0.55, 0.65))
+	_draw_spawn_pad(spawn_enemy, Color(0.95, 0.45, 0.40, 0.65))
+
+
+func _draw_spawn_pad(pos: Vector2, col: Color) -> void:
+	var pad_w := 52.0
+	var pad_h := 7.0
+	var rect := Rect2(pos.x - pad_w * 0.5, pos.y - 1.0, pad_w, pad_h)
+	draw_rect(rect, Color(col.r, col.g, col.b, 0.28))
+	draw_rect(rect, col, false, 1.5)
+	# 内側の短いハイライトで「立つ位置」を示す
+	draw_rect(Rect2(pos.x - 10.0, pos.y - 1.0, 20.0, 3.0), Color(1, 1, 1, 0.35))
+
+
+func _draw_layout_caption() -> void:
+	# 画面左下にレイアウト名だけ（操作説明の重複はしない）
+	var label := layout_label(layout_id)
+	var font: Font = ThemeDB.fallback_font
+	var fs := 13
+	var text_size := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs)
+	var pad := Vector2(10, 6)
+	var box_pos := Vector2(12, VIEW_H - 36)
+	var box := Rect2(box_pos, text_size + pad * 2.0)
+	draw_rect(box, Color(0.05, 0.07, 0.09, 0.55))
+	draw_rect(box, Color(0.70, 0.78, 0.85, 0.35), false, 1.0)
+	draw_string(font, box_pos + pad + Vector2(0, text_size.y - 2.0), label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0.88, 0.92, 0.95, 0.9))
 
 
 ## 落下中（vel_y>=0）に足場上面へ着地できるか。戻り: {landed, y, platform}
