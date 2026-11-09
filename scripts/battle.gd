@@ -459,9 +459,13 @@ func _enemy_ai(delta: float) -> void:
 		)
 		if dir != 0.0:
 			_enemy.facing = dir
-		# jump_bias でアーキタイプ差（切り込み／幻影は跳びやすい）
-		if bool(action.get("jump", false)) or (
-			_enemy_on_ground and absf(_player_pos.y - _enemy_pos.y) > 40.0 and randf() < _enemy_jump_bias * delta * 2.5
+		# ステージが要求するジャンプは実行。加えてプレイヤーが上にいるときだけ jump_bias で追従ジャンプ
+		if bool(action.get("jump", false)):
+			_try_jump(false)
+		elif (
+			_enemy_on_ground
+			and _player_pos.y + 28.0 < _enemy_pos.y
+			and randf() < _enemy_jump_bias * delta * 3.0
 		):
 			_try_jump(false)
 	_enemy_timer -= delta
