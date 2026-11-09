@@ -146,6 +146,15 @@ func _check_arena_layouts() -> bool:
 			push_error("spawn out of world in " + lid)
 			arena.free()
 			return false
+		# 拡幅後: 敵スポーンが旧ワールド右端(920)より右にあること
+		if arena.spawn_enemy.x <= 920.0 and lid != "flat_gap":
+			push_error("expected wider stage spawn for " + lid)
+			arena.free()
+			return false
+	if float(A.WORLD_W) < 1200.0 or float(A.WORLD_RIGHT) <= 920.0:
+		push_error("arena world not enlarged")
+		arena.free()
+		return false
 	# ローテが通常／ボスで分かれること
 	var n0: String = A.pick_layout_id(0, false)
 	var n1: String = A.pick_layout_id(1, false)
@@ -159,7 +168,7 @@ func _check_arena_layouts() -> bool:
 		arena.free()
 		return false
 	arena.free()
-	print("arena_layouts ", ids)
+	print("arena_layouts ", ids, " world_w=", A.WORLD_W)
 	return true
 
 
