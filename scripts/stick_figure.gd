@@ -3,7 +3,7 @@ extends Node2D
 ## 棒人間。敵アーキタイプ／装備武器・必殺で見た目と攻撃エフェクトが変わる。
 ## FIGHTER_SCALE で全体を少し小さく（描画と戦闘リーチを揃える前提）。
 
-enum AttackKind { NONE, WEAK, MID, STRONG, SPECIAL, HURT }
+enum AttackKind { NONE, WEAK, MID, STRONG, SPECIAL, HURT, KO }
 enum Phase { IDLE, WINDUP, ACTIVE, RECOVERY }
 
 ## 基準サイズからの縮小率（〜20%）。戦闘側の reach / 縦ヒット幅も同率で揃える。
@@ -28,6 +28,10 @@ var special_flash_color: Color = Color(0.6, 0.85, 1.0)
 var special_kind: String = "projectile"
 var attack_flash: float = 0.0
 var attack_flash_color: Color = Color(1, 1, 1, 0.8)
+## 被弾フラッシュ（白〜赤）とヒット方向（-1/1）。KO 中はポーズ固定。
+var hurt_flash: float = 0.0
+var hurt_dir: float = -1.0
+var pose_locked: bool = false
 
 var _phase_dur: float = 0.0
 var _windup: float = 0.0
@@ -62,10 +66,12 @@ func apply_special_visual(vis: Dictionary) -> void:
 
 
 func is_busy() -> bool:
-	return phase != Phase.IDLE
+	return phase != Phase.IDLE or pose_locked
 
 
 func play_attack(kind: AttackKind, windup: float, active: float, recovery: float, on_active: Callable = Callable()) -> void:
+	if pose_locked:
+		return
 	attack_kind = kind
 	_windup = maxf(0.02, windup)
 	_active = maxf(0.02, active)
@@ -76,11 +82,27 @@ func play_attack(kind: AttackKind, windup: float, active: float, recovery: float
 	_enter_phase(Phase.WINDUP, _windup)
 
 
-func play_hurt(duration: float = 0.12) -> void:
+## hit_from: 攻撃者の facing（やられ方向）。duration は短めでもポーズは誇張する。
+func play_hurt(duration: float = 0.18, hit_from: float = 0.0) -> void:
+	if pose_locked:
+		return
 	attack_kind = AttackKind.HURT
 	_on_active_cb = Callable()
 	_active_fired = true
-	_enter_phase(Phase.RECOVERY, maxf(0.06, duration))
+	hurt_dir = hit_from if hit_from != 0.0 else -facing
+	hurt_flash = 1.0
+	_enter_phase(Phase.RECOVERY, maxf(0.10, duration))
+
+
+## HP0 時の敗北／撃破ポーズ。シーン遷移まで固定。
+func play_ko(hit_from: float = 0.0) -> void:
+	attack_kind = AttackKind.KO
+	pose_locked = true
+	_on_active_cb = Callable()
+	_active_fired = true
+	hurt_dir = hit_from if hit_from != 0.0 else -facing
+	hurt_flash = 0.85
+	_enter_phase(Phase.RECOVERY, 99.0)
 
 
 func _enter_phase(p: Phase, dur: float) -> void:
@@ -94,12 +116,18 @@ func _enter_phase(p: Phase, dur: float) -> void:
 
 
 func _process(delta: float) -> void:
-	pose_phase += delta * (14.0 if phase == Phase.ACTIVE else 6.0)
+	pose_phase += delta * (16.0 if phase == Phase.ACTIVE else 6.0)
 	if attack_flash > 0.0:
-		attack_flash = maxf(0.0, attack_flash - delta * 4.5)
+		attack_flash = maxf(0.0, attack_flash - delta * 5.5)
+	if hurt_flash > 0.0:
+		hurt_flash = maxf(0.0, hurt_flash - delta * (1.2 if pose_locked else 4.0))
 	if phase != Phase.IDLE:
+		if pose_locked and attack_kind == AttackKind.KO:
+			phase_t = minf(1.0, phase_t + delta * 2.5)
+			queue_redraw()
+			return
 		phase_t += delta / maxf(0.001, _phase_dur)
-		if phase == Phase.ACTIVE and not _active_fired and phase_t >= 0.15:
+		if phase == Phase.ACTIVE and not _active_fired and phase_t >= 0.12:
 			_active_fired = true
 			if _on_active_cb.is_valid():
 				_on_active_cb.call()
@@ -109,6 +137,9 @@ func _process(delta: float) -> void:
 
 
 func _advance_phase() -> void:
+	if pose_locked and attack_kind == AttackKind.KO:
+		phase_t = 1.0
+		return
 	match phase:
 		Phase.WINDUP:
 			_enter_phase(Phase.ACTIVE, _active)
@@ -128,6 +159,8 @@ func _advance_phase() -> void:
 
 func _draw() -> void:
 	var c := figure_color
+	if hurt_flash > 0.05:
+		c = c.lerp(Color(1.0, 0.55, 0.55), clampf(hurt_flash, 0.0, 1.0) * 0.85)
 	var s := body_scale * FIGHTER_SCALE
 	var f := facing
 	var w := maxf(1.5, line_width * FIGHTER_SCALE)
@@ -138,8 +171,9 @@ func _draw() -> void:
 	var leg_l := Vector2(-12.0 * f, 42.0)
 	var leg_r := Vector2(12.0 * f, 42.0)
 	var stretch := 1.0
+	var shake := Vector2.ZERO
 
-	if phase == Phase.IDLE:
+	if phase == Phase.IDLE and not pose_locked:
 		var swing := sin(pose_phase) * 8.0 * f
 		arm_l = Vector2((-22.0 + swing) * f, -5.0)
 		arm_r = Vector2((20.0 + swing * 0.3) * f, 0.0)
@@ -154,10 +188,12 @@ func _draw() -> void:
 		leg_r = pose["leg_r"]
 		lean = pose["lean"]
 		stretch = pose["stretch"]
-		bob *= 0.4
+		bob *= 0.25 if attack_kind in [AttackKind.HURT, AttackKind.KO] else 0.4
+		if hurt_flash > 0.0:
+			shake = Vector2(sin(pose_phase * 40.0) * hurt_flash * 3.5 * hurt_dir, cos(pose_phase * 33.0) * hurt_flash * 1.5)
 
 	_last_arm_r = arm_r
-	var origin := Vector2(lean, bob)
+	var origin := Vector2(lean, bob) + shake
 	# ボス輪郭
 	if is_boss:
 		draw_circle((origin + Vector2(0, -40 * stretch)) * s, (head_radius + 3.0) * s, accent_color.darkened(0.35))
@@ -171,11 +207,16 @@ func _draw() -> void:
 	# 脚
 	draw_line((origin + Vector2(0, 10)) * s, (origin + leg_l) * s, c, w)
 	draw_line((origin + Vector2(0, 10)) * s, (origin + leg_r) * s, c, w)
-	# 武器
-	_draw_weapon(origin, arm_r, s, f)
+	# 武器（KO 中は下げた腕に追随）
+	if attack_kind != AttackKind.KO:
+		_draw_weapon(origin, arm_r, s, f)
 	# 攻撃フラッシュ
-	if attack_flash > 0.05:
+	if attack_flash > 0.05 and attack_kind != AttackKind.HURT and attack_kind != AttackKind.KO:
 		_draw_attack_fx(origin, arm_r, s, f)
+	# 被弾リング
+	if hurt_flash > 0.2 and attack_kind == AttackKind.HURT:
+		var ring_a := hurt_flash * 0.45
+		draw_arc(origin * s, 28.0 * s, 0.0, TAU, 18, Color(1.0, 0.7, 0.7, ring_a), 2.0)
 
 
 func _draw_weapon(origin: Vector2, arm_r: Vector2, s: float, f: float) -> void:
@@ -236,15 +277,20 @@ func _draw_weapon(origin: Vector2, arm_r: Vector2, s: float, f: float) -> void:
 
 func _draw_attack_fx(origin: Vector2, arm_r: Vector2, s: float, f: float) -> void:
 	var a := clampf(attack_flash, 0.0, 1.0)
-	var col := Color(attack_flash_color.r, attack_flash_color.g, attack_flash_color.b, 0.55 * a)
+	var col := Color(attack_flash_color.r, attack_flash_color.g, attack_flash_color.b, 0.6 * a)
 	var hand := (origin + arm_r) * s
 	match attack_kind:
 		AttackKind.WEAK:
-			draw_circle(hand + Vector2(10 * f, 0) * s, 6.0 * s * a, col)
+			draw_circle(hand + Vector2(12 * f, 0) * s, 7.0 * s * a, col)
+			draw_line(hand, hand + Vector2(18 * f, 0) * s, col, 2.5)
 		AttackKind.MID:
-			draw_arc(hand, 18.0 * s, -0.8 if f > 0 else PI - 0.8, 0.8 if f > 0 else PI + 0.8, 12, col, 3.0)
+			var a0 := -1.1 if f > 0 else PI - 1.1
+			var a1 := 1.1 if f > 0 else PI + 1.1
+			draw_arc(hand, 22.0 * s, a0, a1, 14, col, 3.5)
+			draw_arc(hand, 14.0 * s, a0, a1, 10, Color(col.r, col.g, col.b, col.a * 0.5), 2.0)
 		AttackKind.STRONG:
-			draw_line(hand + Vector2(-6 * f, -16) * s, hand + Vector2(14 * f, 18) * s, col, 4.0)
+			draw_line(hand + Vector2(-8 * f, -20) * s, hand + Vector2(16 * f, 22) * s, col, 5.0)
+			draw_circle(hand + Vector2(14 * f, 18) * s, 8.0 * s * a, col)
 		AttackKind.SPECIAL:
 			_draw_special_fx(hand, s, f, col, a)
 		_:
@@ -288,8 +334,19 @@ func _draw_special_fx(hand: Vector2, s: float, f: float, col: Color, a: float) -
 			draw_circle(tip, 8.0 * s * a, col)
 
 
+func _ease_out(t: float) -> float:
+	return 1.0 - (1.0 - clampf(t, 0.0, 1.0)) * (1.0 - clampf(t, 0.0, 1.0))
+
+
+func _ease_in(t: float) -> float:
+	var u := clampf(t, 0.0, 1.0)
+	return u * u
+
+
 func _attack_pose_vectors(f: float) -> Dictionary:
 	var t := clampf(phase_t, 0.0, 1.0)
+	var eo := _ease_out(t)
+	var ei := _ease_in(t)
 	var arm_l := Vector2(-18.0 * f, -4.0)
 	var arm_r := Vector2(16.0 * f, 0.0)
 	var leg_l := Vector2(-12.0 * f, 42.0)
@@ -302,64 +359,108 @@ func _attack_pose_vectors(f: float) -> Dictionary:
 		reach_pose = 1.15
 	elif weapon_style == "spear":
 		reach_pose = 1.2
+	var hd := hurt_dir if hurt_dir != 0.0 else -f
 
 	match attack_kind:
 		AttackKind.WEAK:
+			# シャープなジャブ: 短い引き → 瞬間伸び → 引き戻し
 			if phase == Phase.WINDUP:
-				arm_r = Vector2(8.0 * f, -12.0)
-				lean = -2.0 * f
+				arm_r = Vector2((-4.0 + 6.0 * ei) * f, -16.0 - 4.0 * ei)
+				arm_l = Vector2((-20.0 - 4.0 * ei) * f, 2.0)
+				leg_r = Vector2((8.0 + 6.0 * ei) * f, 40.0)
+				lean = (-6.0 - 2.0 * ei) * f
 			elif phase == Phase.ACTIVE:
-				arm_r = Vector2((34.0 + 8.0 * t) * f * reach_pose, -2.0)
-				lean = 4.0 * f
+				arm_r = Vector2((38.0 + 10.0 * eo) * f * reach_pose, -4.0 + 2.0 * eo)
+				arm_l = Vector2((-26.0) * f, 8.0)
+				leg_l = Vector2((-16.0) * f, 42.0)
+				leg_r = Vector2((18.0) * f, 40.0)
+				lean = (10.0 + 4.0 * eo) * f
+				stretch = 1.04
 			else:
-				arm_r = Vector2(14.0 * f, 4.0)
+				arm_r = Vector2((18.0 - 6.0 * eo) * f, 6.0)
+				arm_l = Vector2((-16.0) * f, 0.0)
+				lean = (3.0 - 2.0 * eo) * f
 		AttackKind.MID:
+			# 薙ぎ払い: 肩を開き、弧を大きく見せる
 			if phase == Phase.WINDUP:
-				arm_r = Vector2(-6.0 * f, -18.0)
-				arm_l = Vector2(-10.0 * f, 6.0)
-				lean = -4.0 * f
-			elif phase == Phase.ACTIVE:
-				arm_r = Vector2((28.0 + 10.0 * t) * f * reach_pose, -8.0 + 16.0 * t)
-				arm_l = Vector2(-24.0 * f, 4.0)
-				lean = 8.0 * f
-			else:
-				arm_r = Vector2(18.0 * f, 10.0)
-				lean = 2.0 * f
-		AttackKind.STRONG:
-			if phase == Phase.WINDUP:
-				arm_l = Vector2(-10.0 * f, -36.0)
-				arm_r = Vector2(10.0 * f, -38.0)
-				lean = -2.0 * f
-				stretch = 1.05
-			elif phase == Phase.ACTIVE:
-				arm_l = Vector2(8.0 * f, 18.0)
-				arm_r = Vector2((30.0 + 6.0 * t) * f * reach_pose, 22.0)
-				lean = 10.0 * f
-				stretch = 0.95
-			else:
-				arm_l = Vector2(-14.0 * f, 8.0)
-				arm_r = Vector2(16.0 * f, 12.0)
-				lean = 3.0 * f
-		AttackKind.SPECIAL:
-			if phase == Phase.WINDUP:
-				arm_l = Vector2(-8.0 * f, -20.0)
-				arm_r = Vector2(8.0 * f, -22.0)
-				stretch = 1.08
-			elif phase == Phase.ACTIVE:
-				arm_l = Vector2((26.0 + 6.0 * t) * f, -6.0)
-				arm_r = Vector2((36.0 + 8.0 * t) * f, 0.0)
-				lean = 6.0 * f
-				stretch = 1.12
-			else:
-				arm_l = Vector2(10.0 * f, 4.0)
-				arm_r = Vector2(18.0 * f, 6.0)
+				arm_r = Vector2((-14.0 - 6.0 * ei) * f, -22.0 - 8.0 * ei)
+				arm_l = Vector2((-8.0) * f, 10.0)
+				leg_l = Vector2((-18.0) * f, 40.0)
+				leg_r = Vector2((16.0) * f, 42.0)
+				lean = (-10.0 - 4.0 * ei) * f
 				stretch = 1.02
+			elif phase == Phase.ACTIVE:
+				arm_r = Vector2((32.0 + 14.0 * eo) * f * reach_pose, -14.0 + 28.0 * eo)
+				arm_l = Vector2((-28.0) * f, 2.0)
+				leg_l = Vector2((-20.0) * f, 42.0)
+				leg_r = Vector2((20.0) * f, 40.0)
+				lean = (12.0 + 6.0 * eo) * f
+				stretch = 0.98
+			else:
+				arm_r = Vector2((22.0 - 4.0 * eo) * f, 14.0)
+				arm_l = Vector2((-12.0) * f, 6.0)
+				lean = (4.0 - eo) * f
+		AttackKind.STRONG:
+			# 振り下ろし: 頭上タメ → 踏み込み叩き
+			if phase == Phase.WINDUP:
+				arm_l = Vector2((-6.0) * f, -42.0 - 6.0 * ei)
+				arm_r = Vector2((6.0) * f, -44.0 - 8.0 * ei)
+				leg_l = Vector2((-8.0) * f, 40.0)
+				leg_r = Vector2((14.0) * f, 42.0)
+				lean = (-4.0 - 4.0 * ei) * f
+				stretch = 1.10 + 0.04 * ei
+			elif phase == Phase.ACTIVE:
+				arm_l = Vector2((12.0 + 4.0 * eo) * f, 20.0 + 6.0 * eo)
+				arm_r = Vector2((34.0 + 10.0 * eo) * f * reach_pose, 26.0 + 4.0 * eo)
+				leg_l = Vector2((-22.0) * f, 42.0)
+				leg_r = Vector2((24.0) * f, 40.0)
+				lean = (14.0 + 6.0 * eo) * f
+				stretch = 0.92
+			else:
+				arm_l = Vector2((-12.0) * f, 10.0)
+				arm_r = Vector2((18.0) * f, 16.0)
+				lean = (5.0 - 2.0 * eo) * f
+				stretch = 0.98
+		AttackKind.SPECIAL:
+			# 溜めシルエット → 両腕突き出しの決めポーズ
+			if phase == Phase.WINDUP:
+				arm_l = Vector2((-12.0) * f, -28.0 - 6.0 * ei)
+				arm_r = Vector2((4.0) * f, -30.0 - 8.0 * ei)
+				leg_l = Vector2((-14.0) * f, 40.0)
+				leg_r = Vector2((14.0) * f, 42.0)
+				lean = (-6.0) * f
+				stretch = 1.12 + 0.06 * ei
+			elif phase == Phase.ACTIVE:
+				arm_l = Vector2((28.0 + 8.0 * eo) * f, -8.0)
+				arm_r = Vector2((40.0 + 12.0 * eo) * f * reach_pose, -2.0 + 4.0 * eo)
+				leg_l = Vector2((-20.0) * f, 42.0)
+				leg_r = Vector2((22.0) * f, 40.0)
+				lean = (10.0 + 4.0 * eo) * f
+				stretch = 1.14
+			else:
+				arm_l = Vector2((14.0) * f, 2.0)
+				arm_r = Vector2((22.0) * f, 4.0)
+				lean = (4.0) * f
+				stretch = 1.04
 		AttackKind.HURT:
-			arm_l = Vector2(-28.0 * f, -10.0)
-			arm_r = Vector2(6.0 * f, 12.0)
-			lean = -10.0 * f
-			leg_l = Vector2(-18.0 * f, 40.0)
-			leg_r = Vector2(8.0 * f, 44.0)
+			# ヒット方向へのけぞり → よろめき（t で進行）
+			var recoil := 1.0 - 0.35 * eo
+			arm_l = Vector2((-30.0 - 8.0 * (1.0 - eo)) * hd, -14.0 - 6.0 * (1.0 - eo))
+			arm_r = Vector2((10.0 + 6.0 * eo) * hd, 16.0 - 4.0 * eo)
+			# facing 基準ではなくヒット方向へ傾ける
+			lean = (-16.0 * recoil) * hd
+			leg_l = Vector2((-20.0) * hd, 38.0 + 4.0 * eo)
+			leg_r = Vector2((10.0) * hd, 44.0 - 2.0 * eo)
+			stretch = 0.94 + 0.04 * eo
+		AttackKind.KO:
+			# 崩れ落ち: 膝を折り、胴を倒し、腕をだらりと
+			var fall := eo
+			arm_l = Vector2((-22.0 - 10.0 * fall) * hd, 8.0 + 18.0 * fall)
+			arm_r = Vector2((8.0 + 6.0 * fall) * hd, 14.0 + 16.0 * fall)
+			leg_l = Vector2((-24.0) * hd, 28.0 + 10.0 * fall)
+			leg_r = Vector2((6.0) * hd, 34.0 + 8.0 * fall)
+			lean = (-8.0 - 18.0 * fall) * hd
+			stretch = 0.88 - 0.08 * fall
 		_:
 			pass
 

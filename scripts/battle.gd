@@ -48,7 +48,7 @@ var _cam: Camera2D
 const GRAVITY := 2800.0
 const JUMP_SPEED := -820.0
 const AIR_DODGE_HEIGHT := 40.0
-const END_DELAY_SEC := 0.35
+const END_DELAY_SEC := 0.55
 const BASE_MOVE_SPEED := 280.0
 const KB_DECAY := 10.0
 const KB_WEAK := 180.0
@@ -59,12 +59,13 @@ const KB_ENEMY := 240.0
 const KB_STRONG_UP := -180.0
 const FALL_PENALTY := 8
 
+## ポーズは誇張、尺は短め（軽快・サクサク優先）
 const MOTION := {
-	"weak": {"windup": 0.04, "active": 0.06, "recovery": 0.08, "kind": StickFigure.AttackKind.WEAK},
-	"mid": {"windup": 0.06, "active": 0.08, "recovery": 0.12, "kind": StickFigure.AttackKind.MID},
-	"strong": {"windup": 0.10, "active": 0.10, "recovery": 0.18, "kind": StickFigure.AttackKind.STRONG},
-	"special": {"windup": 0.08, "active": 0.12, "recovery": 0.16, "kind": StickFigure.AttackKind.SPECIAL},
-	"enemy": {"windup": 0.08, "active": 0.08, "recovery": 0.10, "kind": StickFigure.AttackKind.MID},
+	"weak": {"windup": 0.035, "active": 0.055, "recovery": 0.07, "kind": StickFigure.AttackKind.WEAK},
+	"mid": {"windup": 0.05, "active": 0.07, "recovery": 0.10, "kind": StickFigure.AttackKind.MID},
+	"strong": {"windup": 0.085, "active": 0.09, "recovery": 0.15, "kind": StickFigure.AttackKind.STRONG},
+	"special": {"windup": 0.07, "active": 0.11, "recovery": 0.13, "kind": StickFigure.AttackKind.SPECIAL},
+	"enemy": {"windup": 0.07, "active": 0.07, "recovery": 0.09, "kind": StickFigure.AttackKind.MID},
 }
 
 
@@ -458,7 +459,7 @@ func _apply_knockback_to_enemy(tier: String) -> void:
 			up = KB_STRONG_UP * 0.5
 	_enemy_kb.x = push * force
 	_enemy_kb.y = up
-	_enemy.play_hurt(0.10)
+	_enemy.play_hurt(0.18 if tier != "strong" and tier != "special" else 0.22, _player.facing)
 
 
 func _apply_knockback_to_player() -> void:
@@ -466,7 +467,7 @@ func _apply_knockback_to_player() -> void:
 	if push == 0.0:
 		push = -_enemy.facing
 	_player_kb.x = push * KB_ENEMY
-	_player.play_hurt(0.10)
+	_player.play_hurt(0.18, _enemy.facing)
 
 
 func _hurt_enemy(amount: int) -> void:
@@ -475,6 +476,7 @@ func _hurt_enemy(amount: int) -> void:
 	_enemy_hp = maxi(0, _enemy_hp - amount)
 	enemy_hp_bar.value = _enemy_hp
 	if _enemy_hp <= 0:
+		_enemy.play_ko(_player.facing)
 		_finish_win()
 
 
@@ -543,6 +545,7 @@ func _on_enemy_attack_active() -> void:
 	_log("敵の攻撃！ %d ダメージ" % _enemy_damage)
 	player_hp_bar.value = GameState.hp
 	if not alive:
+		_player.play_ko(_enemy.facing)
 		_finish_lose()
 
 
@@ -551,6 +554,9 @@ func _finish_win() -> void:
 		return
 	_finished = true
 	_log("勝利！")
+	# 撃破ポーズが見えるよう少し待つ（敵は play_ko 済み）
+	if _enemy != null and not _enemy.pose_locked:
+		_enemy.play_ko(_player.facing)
 	await get_tree().create_timer(END_DELAY_SEC).timeout
 	GameState.on_battle_won()
 
@@ -560,6 +566,8 @@ func _finish_lose() -> void:
 		return
 	_finished = true
 	_log("敗北…")
+	if _player != null and not _player.pose_locked:
+		_player.play_ko(_enemy.facing if _enemy else -1.0)
 	await get_tree().create_timer(END_DELAY_SEC).timeout
 	GameState.on_battle_lost()
 
