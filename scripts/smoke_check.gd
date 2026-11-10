@@ -113,8 +113,24 @@ func _check_enemy_and_visuals() -> bool:
 		push_error("FIGHTER_SCALE out of modest shrink range: %s" % str(fscale))
 		fig.free()
 		return false
+	# やられ／KO モーション API
+	fig.play_hurt(0.15, 1.0)
+	if fig.attack_kind != SF.AttackKind.HURT or fig.hurt_flash <= 0.0:
+		push_error("play_hurt failed")
+		fig.free()
+		return false
+	fig.play_ko(-1.0)
+	if fig.attack_kind != SF.AttackKind.KO or not bool(fig.pose_locked):
+		push_error("play_ko failed")
+		fig.free()
+		return false
+	fig.play_attack(SF.AttackKind.WEAK, 0.03, 0.05, 0.05)
+	if fig.attack_kind != SF.AttackKind.KO:
+		push_error("KO should block new attacks")
+		fig.free()
+		return false
 	fig.free()
-	print("enemy_types ", seen_normal.keys(), " bosses ", boss_a["id"], "/", boss_b["id"], " fighter_scale=", fscale)
+	print("enemy_types ", seen_normal.keys(), " bosses ", boss_a["id"], "/", boss_b["id"], " fighter_scale=", fscale, " motions=hurt+ko")
 	return true
 
 
